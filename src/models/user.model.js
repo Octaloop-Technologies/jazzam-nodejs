@@ -43,15 +43,28 @@ const userSchema = new Schema(
         type: String, // OSS object key for deletion
       },
     },
-    watchHistory: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Video",
-      },
-    ],
     password: {
       type: String,
       required: [true, "Password is required"],
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    zohoCrmId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    provider: {
+      type: String,
+      enum: ["local", "google", "zohocrm"],
+      default: "local",
     },
     refreshToken: {
       type: String,
@@ -84,7 +97,6 @@ userSchema.methods.generateAccessToken = function () {
       fullName: this.fullName,
       avatar: this.avatar,
       coverImage: this.coverImage,
-      watchHistory: this.watchHistory,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {

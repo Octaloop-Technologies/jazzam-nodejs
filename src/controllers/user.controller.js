@@ -2,11 +2,12 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
 import { uploadToOSS, deleteFromOSS } from "../utils/oss.js";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
-// generate access and refresh token function
+// ==============================================================
+// User Authentication Functions
+// ==============================================================
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -241,6 +242,156 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Password Changed successfully"));
 });
 
+// ==============================================================
+// OAuth Login Functions
+// ==============================================================
+
+const googleLoginCallback = asyncHandler(async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user) {
+      throw new ApiError(401, "Google authentication failed");
+    }
+
+    // Generate tokens for the authenticated user
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
+
+    const loggedInUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    // Set cookies
+    const options = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .redirect(`${process.env.CLIENT_URL}/dashboard?login=success`);
+  } catch (error) {
+    return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+  }
+});
+
+const zohoCrmLoginUser = asyncHandler(async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      // Redirect to Zoho CRM OAuth
+      const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
+      return res.redirect(authUrl);
+    }
+
+    // Exchange code for access token
+    const tokenResponse = await fetch(
+      "https://accounts.zoho.com/oauth/v2/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: process.env.ZOHO_CLIENT_ID,
+          client_secret: process.env.ZOHO_CLIENT_SECRET,
+          redirect_uri: process.env.ZOHO_REDIRECT_URI,
+          code: code,
+        }),
+      }
+    );
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      throw new ApiError(400, "Failed to get access token from Zoho CRM");
+    }
+
+    // Get user info from Zoho CRM
+    const userResponse = await fetch(
+      "https://www.zohoapis.com/crm/v2/users?type=CurrentUser",
+      {
+        headers: {
+          Authorization: `Zoho-oauthtoken ${tokenData.access_token}`,
+        },
+      }
+    );
+
+    const userData = await userResponse.json();
+
+    if (!userData.users || userData.users.length === 0) {
+      throw new ApiError(400, "Failed to get user data from Zoho CRM");
+    }
+
+    const zohoCrmUser = userData.users[0];
+
+    // Check if user already exists
+    let user = await User.findOne({ zohoCrmId: zohoCrmUser.id });
+
+    if (!user) {
+      // Check if user exists with same email
+      user = await User.findOne({ email: zohoCrmUser.email });
+
+      if (user) {
+        // Link Zoho CRM account to existing user
+        user.zohoCrmId = zohoCrmUser.id;
+        user.provider = "zohocrm";
+        await user.save();
+      } else {
+        // Create new user
+        user = await User.create({
+          name: zohoCrmUser.email.split("@")[0].toLowerCase(),
+          email: zohoCrmUser.email,
+          fullName: zohoCrmUser.full_name || zohoCrmUser.name,
+          zohoCrmId: zohoCrmUser.id,
+          provider: "zohocrm",
+          password: "zohocrm_oauth_user", // placeholder password
+          isVerified: true,
+          avatar: {
+            url: "https://via.placeholder.com/150",
+            public_id: `zohocrm_${zohoCrmUser.id}`,
+          },
+        });
+      }
+    }
+
+    // Generate tokens
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
+
+    const loggedInUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    // Set cookies
+    const options = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .redirect(`${process.env.CLIENT_URL}/dashboard?login=success`);
+  } catch (error) {
+    console.error("Zoho CRM OAuth Error:", error);
+    return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+  }
+});
+
+// ==============================================================
+// User settings Functions
+// ==============================================================
 const getCurrentUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
@@ -329,122 +480,11 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover image updated successfully"));
 });
 
-const getUserChannelProfile = asyncHandler(async (req, res) => {
-  const { name } = req.params;
-
-  if (!name) {
-    throw new ApiError(400, "user name is missing");
-  }
-
-  const channel = await User.aggregate([
-    { $match: { name: name?.toLowerCase() } },
-    {
-      $lookup: {
-        from: "subscriptions",
-        localField: "_id",
-        foreignField: "channel",
-        as: "subscribers",
-      },
-    },
-    {
-      $lookup: {
-        from: "subscriptions",
-        localField: "_id",
-        foreignField: "subscriber",
-        as: "subscribedTo",
-      },
-    },
-    {
-      $addFields: {
-        subscribersCount: { $size: "$subscribers" },
-        subscribedToCount: { $size: "$subscribedTo" },
-        isSubscribed: {
-          $cond: {
-            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
-            then: true,
-            else: false,
-          },
-        },
-      },
-    },
-    {
-      $project: {
-        fullName: 1,
-        name: 1,
-        email: 1,
-        subscribersCount: 1,
-        subscribedToCount: 1,
-        avatar: 1,
-        coverImage: 1,
-        isSubscribed: 1,
-        createdAt: 1,
-      },
-    },
-  ]);
-
-  if (!channel?.length) {
-    throw new ApiError(404, "Channel does not exists");
-  }
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, channel[0], "Channel profile fetched successfully")
-    );
-});
-
-const getWatchHistory = asyncHandler(async (req, res) => {
-  const user = await User.aggregate([
-    {
-      $match: {
-        _id: mongoose.Types.ObjectId.createFromHexString(req.user._id),
-      },
-    },
-    {
-      $lookup: {
-        from: "videos",
-        localField: "watchHistory", // video _id is inside watchHisory array
-        foreignField: "_id",
-        as: "watchHistory",
-        pipeline: [
-          {
-            $lookup: {
-              from: "users",
-              localField: "owner",
-              foreignField: "_id",
-              as: "owner",
-              pipeline: {
-                $project: {
-                  name: 1,
-                  avatar: 1,
-                  fullName: 1,
-                },
-              },
-            },
-          },
-          {
-            $addFields: {
-              owner: { $arrayElemAt: ["$owner", 0] },
-            },
-          },
-        ],
-      },
-    },
-  ]);
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        user[0].watchHistory,
-        "Watch history fetched successfully"
-      )
-    );
-});
-
 export {
   registeruser,
   loginUser,
+  googleLoginCallback,
+  zohoCrmLoginUser,
   logoutUser,
   refreshAccessToken,
   changeCurrentPassword,
@@ -452,6 +492,4 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
-  getUserChannelProfile,
-  getWatchHistory,
 };

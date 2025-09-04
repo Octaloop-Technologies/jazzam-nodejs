@@ -2,8 +2,7 @@ import { Router } from "express";
 import {
   changeCurrentPassword,
   getCurrentUser,
-  getUserChannelProfile,
-  getWatchHistory,
+  googleLoginCallback,
   loginUser,
   logoutUser,
   refreshAccessToken,
@@ -11,36 +10,54 @@ import {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  zohoCrmLoginUser,
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import passport from "../config/passport.js";
 
 const router = Router();
 
-router.route("/register").post(
+// ========================================================================
+// endpoint /api/v1/users/auth/(register, login, etc...)
+// ========================================================================
+
+router.route("/auth/register").post(
   upload.fields([
     { name: "avatar", maxCount: 1 },
     { name: "coverImage", maxCount: 1 },
   ]),
   registeruser
 );
-router.route("/login").post(loginUser);
+router.route("/auth/login").post(loginUser);
+
+// OAuth routes
+router
+  .route("/auth/google")
+  .get(passport.authenticate("google", { scope: ["profile", "email"] }));
+router.route("/auth/google/callback").get(
+  passport.authenticate("google", {
+    failureRedirect: "/login?error=auth_failed",
+  }),
+  googleLoginCallback
+);
+
+// Zoho CRM OAuth routes
+router.route("/auth/zohocrm").get(zohoCrmLoginUser);
+router.route("/auth/zohocrm/callback").get(zohoCrmLoginUser);
 
 // secured routes
-router.route("/logout").post(verifyJWT, logoutUser);
-router.route("/refresh-token").post(refreshAccessToken);
-router.route("/change-password").post(verifyJWT, changeCurrentPassword);
-router.route("/current-user").get(verifyJWT, getCurrentUser);
-router.route("/update-account").patch(verifyJWT, updateAccountDetails);
+router.route("/auth/logout").post(verifyJWT, logoutUser);
+router.route("/auth/refresh-token").post(refreshAccessToken);
+router.route("/auth/change-password").post(verifyJWT, changeCurrentPassword);
+router.route("/auth/current-user").get(verifyJWT, getCurrentUser);
+router.route("/auth/update-account").patch(verifyJWT, updateAccountDetails);
 
 router
-  .route("/avatar")
+  .route("/auth/avatar")
   .patch(verifyJWT, upload.single("avatar"), updateUserAvatar);
 router
-  .route("/cover-image")
+  .route("/auth/cover-image")
   .patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage);
-
-router.route("/c/:name").get(verifyJWT, getUserChannelProfile);
-router.route("/history").get(verifyJWT, getWatchHistory);
 
 export default router;
