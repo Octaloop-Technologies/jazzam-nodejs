@@ -274,7 +274,7 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       .status(200)
       .cookie("accessToken", accessToken, options)
       .cookie("refreshToken", refreshToken, options)
-      .redirect(`${process.env.CLIENT_URL}/dashboard?login=success`);
+      .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
   } catch (error) {
     return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
   }
@@ -286,7 +286,7 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
 
     if (!code) {
       // Redirect to Zoho CRM OAuth
-      const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
+      const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
       return res.redirect(authUrl);
     }
 
@@ -310,13 +310,27 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
 
     const tokenData = await tokenResponse.json();
 
-    if (!tokenData.access_token) {
-      throw new ApiError(400, "Failed to get access token from Zoho CRM");
+    if (!tokenResponse.ok) {
+      console.error("Zoho Token Error:", tokenData);
+      throw new ApiError(
+        400,
+        `Failed to get access token from Zoho: ${tokenData.error_description || tokenData.error || tokenResponse.statusText}`
+      );
     }
 
-    // Get user info from Zoho CRM
+    if (!tokenData.access_token) {
+      console.error("No access token in response:", tokenData);
+      throw new ApiError(
+        400,
+        "Failed to get access token from Zoho CRM - No token in response"
+      );
+    }
+
+    // Get user info from Zoho CRM using the api_domain from token response
+    const apiDomain = tokenData.api_domain || "https://www.zohoapis.com";
+
     const userResponse = await fetch(
-      "https://www.zohoapis.com/crm/v2/users?type=CurrentUser",
+      `${apiDomain}/crm/v2/users?type=CurrentUser`,
       {
         headers: {
           Authorization: `Zoho-oauthtoken ${tokenData.access_token}`,
@@ -325,12 +339,38 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
     );
 
     const userData = await userResponse.json();
+    // console.log("Zoho CRM API Response:", JSON.stringify(userData, null, 2));
 
-    if (!userData.users || userData.users.length === 0) {
-      throw new ApiError(400, "Failed to get user data from Zoho CRM");
+    if (!userResponse.ok) {
+      console.error("Zoho CRM API Error:", userData);
+      throw new ApiError(
+        400,
+        `Zoho CRM API Error: ${userData.message || userResponse.statusText}`
+      );
+    }
+
+    if (
+      !userData.users ||
+      !Array.isArray(userData.users) ||
+      userData.users.length === 0
+    ) {
+      console.error("Invalid user data structure:", userData);
+      throw new ApiError(
+        400,
+        "Failed to get user data from Zoho CRM - Invalid response structure"
+      );
     }
 
     const zohoCrmUser = userData.users[0];
+
+    // Validate required user data
+    if (!zohoCrmUser.id || !zohoCrmUser.email) {
+      console.error("Missing required Zoho user data:", zohoCrmUser);
+      throw new ApiError(
+        400,
+        "Invalid user data from Zoho - Missing required fields (id or email)"
+      );
+    }
 
     // Check if user already exists
     let user = await User.findOne({ zohoCrmId: zohoCrmUser.id });
@@ -382,7 +422,7 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
       .status(200)
       .cookie("accessToken", accessToken, options)
       .cookie("refreshToken", refreshToken, options)
-      .redirect(`${process.env.CLIENT_URL}/dashboard?login=success`);
+      .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
   } catch (error) {
     console.error("Zoho CRM OAuth Error:", error);
     return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);

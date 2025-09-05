@@ -22,6 +22,7 @@ const router = Router();
 // endpoint /api/v1/users/auth/(register, login, etc...)
 // ========================================================================
 
+// Register and Login routes
 router.route("/auth/register").post(
   upload.fields([
     { name: "avatar", maxCount: 1 },
@@ -31,7 +32,7 @@ router.route("/auth/register").post(
 );
 router.route("/auth/login").post(loginUser);
 
-// OAuth routes
+// OAuth routes (Google, Zoho CRM)
 router
   .route("/auth/google")
   .get(passport.authenticate("google", { scope: ["profile", "email"] }));
@@ -42,7 +43,6 @@ router.route("/auth/google/callback").get(
   googleLoginCallback
 );
 
-// Zoho CRM OAuth routes
 router.route("/auth/zohocrm").get(zohoCrmLoginUser);
 router.route("/auth/zohocrm/callback").get(zohoCrmLoginUser);
 
