@@ -92,7 +92,7 @@ const createLead = asyncHandler(async (req, res) => {
 // Get all leads with pagination, filtering, and sorting
 const getLeads = asyncHandler(async (req, res) => {
   const {
-    page = 1,
+    page = 0,
     limit = 10,
     status,
     industry,
@@ -105,14 +105,17 @@ const getLeads = asyncHandler(async (req, res) => {
   } = req.query;
 
   // Build match conditions
-  const matchConditions = { isActive: isActive === "true" };
+  const matchConditions = {
+    isActive: isActive === "true" || isActive === true,
+  };
 
   if (status) matchConditions.status = status;
   if (industry) matchConditions.industry = industry;
   if (source) matchConditions.source = source;
   if (companySize) matchConditions.companySize = companySize;
   if (assignedTo)
-    matchConditions.assignedTo = new mongoose.Types.ObjectId(assignedTo);
+    matchConditions.assignedTo =
+      mongoose.Types.ObjectId.createFromHexString(assignedTo);
 
   // Build sort object
   const sortObj = {};
