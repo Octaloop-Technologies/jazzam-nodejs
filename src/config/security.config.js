@@ -46,7 +46,7 @@ export const securityConfig = {
   rateLimit: {
     auth: {
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 10, // 10 attempts per window
+      max: 15, // 10 attempts per window
       message: {
         error: "Too many authentication attempts, please try again later.",
       },
