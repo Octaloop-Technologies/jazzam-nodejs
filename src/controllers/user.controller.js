@@ -4,6 +4,10 @@ import { uploadToOSS, deleteFromOSS } from "../utils/oss.js";
 import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import {
+  getAccessTokenCookieOptions,
+  getRefreshTokenCookieOptions,
+} from "../config/security.config.js";
 
 // ==============================================================
 // User Authentication Functions
@@ -128,16 +132,11 @@ const loginUser = asyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
-  // set access and refresh token in cookie
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
-
+  // set access and refresh token in cookie using centralized config
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+    .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
     .json(
       new ApiResponse(
         200,
@@ -158,15 +157,10 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
-
   return res
     .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
+    .clearCookie("accessToken", getAccessTokenCookieOptions())
+    .clearCookie("refreshToken", getRefreshTokenCookieOptions())
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 
@@ -195,18 +189,13 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       throw new ApiError(401, "Refresh Token is Expired or used");
     }
 
-    const options = {
-      httpOnly: true,
-      secure: true,
-    };
-
     const { accessToken, newRefreshToken } =
       await generateAccessAndRefreshToken(user._id);
 
     return res
       .status(200)
-      .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", newRefreshToken, options)
+      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+      .cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions())
       .json(
         new ApiResponse(
           200,
@@ -245,7 +234,6 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 // ==============================================================
 // OAuth Login Functions
 // ==============================================================
-
 const googleLoginCallback = asyncHandler(async (req, res) => {
   try {
     const user = req.user;
@@ -259,21 +247,11 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       user._id
     );
 
-    const loggedInUser = await User.findById(user._id).select(
-      "-password -refreshToken"
-    );
-
-    // Set cookies
-    const options = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    };
-
+    // Set cookies using centralized config
     return res
       .status(200)
-      .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", refreshToken, options)
+      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+      .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
       .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
   } catch (error) {
     return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
@@ -407,21 +385,11 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
       user._id
     );
 
-    const loggedInUser = await User.findById(user._id).select(
-      "-password -refreshToken"
-    );
-
-    // Set cookies
-    const options = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-    };
-
+    // Set cookies using centralized config
     return res
       .status(200)
-      .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", refreshToken, options)
+      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+      .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
       .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
   } catch (error) {
     console.error("Zoho CRM OAuth Error:", error);

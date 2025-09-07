@@ -1,6 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { securityConfig } from "../config/security.config.js";
 
 const userSchema = new Schema(
   {
@@ -87,20 +88,15 @@ userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// generate access and refresh token
+// generate access and refresh token - Using centralized config
 userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
       _id: this._id,
-      name: this.name,
-      email: this.email,
-      fullName: this.fullName,
-      avatar: this.avatar,
-      coverImage: this.coverImage,
     },
-    process.env.ACCESS_TOKEN_SECRET,
+    securityConfig.jwt.accessTokenSecret,
     {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+      expiresIn: securityConfig.jwt.accessTokenExpiry,
     }
   );
 };
@@ -110,9 +106,9 @@ userSchema.methods.generateRefreshToken = function () {
     {
       _id: this._id,
     },
-    process.env.REFRESH_TOKEN_SECRET,
+    securityConfig.jwt.refreshTokenSecret,
     {
-      expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+      expiresIn: securityConfig.jwt.refreshTokenExpiry,
     }
   );
 };

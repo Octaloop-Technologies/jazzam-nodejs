@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
+import { securityConfig } from "../config/security.config.js";
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
   try {
@@ -9,23 +10,58 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
       req.cookies?.accessToken ||
       req.header("Authorization")?.replace("Bearer ", "");
 
+    // Remove console logs in production for security
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Auth Debug - Token exists:", !!token);
+    }
+
     if (!token) {
       throw new ApiError(401, "Unauthorized request");
     }
 
-    const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    // Verify token with proper error handling using centralized config
+    const decodedToken = jwt.verify(
+      token,
+      securityConfig.jwt.accessTokenSecret
+    );
+
+    // Check if token is expired manually (additional security)
+    if (decodedToken.exp && Date.now() >= decodedToken.exp * 1000) {
+      throw new ApiError(401, "Access token expired");
+    }
 
     const user = await User.findById(decodedToken?._id).select(
       "-password -refreshToken"
     );
 
     if (!user) {
-      throw new ApiError(401, "Invalid Access Token");
+      throw new ApiError(401, "Invalid Access Token - User not found");
+    }
+
+    // Check if user is still active/verified
+    if (!user.isVerified && user.provider === "local") {
+      throw new ApiError(401, "Account not verified");
     }
 
     req.user = user;
     next();
   } catch (error) {
+    // Only log unexpected errors in production
+    if (
+      process.env.NODE_ENV !== "production" ||
+      (error.message !== "Unauthorized request" &&
+        error.message !== "Access token expired")
+    ) {
+      console.error("JWT Verification Error:", error.message);
+    }
+
+    // Handle specific JWT errors
+    if (error.name === "JsonWebTokenError") {
+      throw new ApiError(401, "Invalid token format");
+    } else if (error.name === "TokenExpiredError") {
+      throw new ApiError(401, "Access token expired");
+    }
+
     throw new ApiError(401, error?.message || "Invalid Access Token");
   }
 });
