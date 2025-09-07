@@ -15,7 +15,7 @@ export const securityConfig = {
   cookies: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "lax" : false,
     domain:
       process.env.NODE_ENV === "production"
         ? process.env.COOKIE_DOMAIN
@@ -185,6 +185,7 @@ export const getCookieOptions = (tokenType = "accessToken") => ({
   sameSite: securityConfig.cookies.sameSite,
   domain: securityConfig.cookies.domain,
   maxAge: securityConfig.cookies.maxAge[tokenType],
+  path: "/", // Ensure cookies are available for all paths
 });
 
 export const getAccessTokenCookieOptions = () =>
