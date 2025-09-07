@@ -16,6 +16,10 @@ import {
   validateEnvironment,
   securityConfig,
 } from "./config/security.config.js";
+import {
+  errorHandler,
+  notFoundHandler,
+} from "./middlewares/error.middleware.js";
 
 const app = express();
 
@@ -47,11 +51,17 @@ app.use(passport.session());
 
 // Routes import
 import userRouter from "./routes/user.routes.js";
+import leadRouter from "./routes/lead.routes.js";
 
 // Apply auth rate limiting to auth routes specifically
 app.use("/api/v1/users/auth", authRateLimit);
 
 // Routes Declaration
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/lead", leadRouter);
+
+// Error handling middleware (must be last)
+app.use(notFoundHandler); // Handle 404s
+app.use(errorHandler); // Handle all other errors
 
 export { app };
