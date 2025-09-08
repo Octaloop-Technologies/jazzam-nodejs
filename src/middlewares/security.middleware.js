@@ -27,6 +27,10 @@ export const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      // Allow Postman and other development tools in non-production environments
+      if (process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
       callback(new Error("Not allowed by CORS"));
     }
   },

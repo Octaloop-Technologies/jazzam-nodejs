@@ -23,9 +23,14 @@ import {
 
 const app = express();
 
+// ==========================================================
 // Validate environment variables on startup
+// ==========================================================
 validateEnvironment();
 
+// ==========================================================
+// Security headers and middleware
+// ==========================================================
 app.use(helmet()); // Security headers first
 app.use(securityHeaders); // Custom security headers
 app.use(cors(corsOptions)); // CORS configuration
@@ -42,25 +47,37 @@ app.use(cookieParser());
 app.use(sanitizeInput); // Input sanitization
 app.use(autoRefreshToken); // Auto token refresh
 
+// ==========================================================
 // Session configuration for passport
+// ==========================================================
 app.use(session(securityConfig.session));
 
+// ==========================================================
 // Passport middleware
+// ==========================================================
 app.use(passport.initialize());
 app.use(passport.session());
 
+// ==========================================================
 // Routes import
+// ==========================================================
 import userRouter from "./routes/user.routes.js";
 import leadRouter from "./routes/lead.routes.js";
 
+// ==========================================================
 // Apply auth rate limiting to auth routes specifically
+// ==========================================================
 app.use("/api/v1/users/auth", authRateLimit);
 
+// ==========================================================
 // Routes Declaration
+// ==========================================================
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/lead", leadRouter);
 
+// ==========================================================
 // Error handling middleware (must be last)
+// ==========================================================
 app.use(notFoundHandler); // Handle 404s
 app.use(errorHandler); // Handle all other errors
 

@@ -12,16 +12,16 @@ import {
 
 const router = Router();
 
-// ========================================================================
-// Lead Management API Endpoints
-// Base URL: /api/v1/lead
-// ========================================================================
-
+// ================================================
 // Public route - Create lead (for form submission)
+// ================================================
+// POST /api/v1/lead/create
 router.route("/create").post(createLead);
 
+// ================================================
 // Protected routes - Require authentication
-router.use(verifyJWT); // Apply JWT verification to all routes below
+// ================================================
+router.use(verifyJWT);
 
 // Get all leads with pagination, filtering, and sorting
 // GET /api/v1/lead/all?page=1&limit=10&status=hot&industry=Technology
