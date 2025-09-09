@@ -10,11 +10,6 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
       req.cookies?.accessToken ||
       req.header("Authorization")?.replace("Bearer ", "");
 
-    // Remove console logs in production for security
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Auth Debug - Token exists:", !!token);
-    }
-
     if (!token) {
       throw new ApiError(401, "Unauthorized request");
     }

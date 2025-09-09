@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   changeCurrentPassword,
+  deleteAccount,
   getCurrentUser,
   googleLoginCallback,
   loginUser,
@@ -86,5 +87,8 @@ router
 router
   .route("/cover-image")
   .patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage);
+
+// DELETE /api/v1/users/delete-account
+router.route("/delete-account").delete(verifyJWT, deleteAccount);
 
 export default router;

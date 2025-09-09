@@ -488,6 +488,36 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover image updated successfully"));
 });
 
+const deleteAccount = asyncHandler(async (req, res) => {
+  await User.findByIdAndDelete(req.user._id);
+
+  const ossDeletePromises = [];
+
+  if (req.user.avatar && req.user.avatar.public_id) {
+    ossDeletePromises.push(
+      deleteFromOSS(req.user.avatar.public_id).catch((error) =>
+        console.error(`Failed to delete avatar: ${error.message}`)
+      )
+    );
+  }
+
+  if (req.user.coverImage && req.user.coverImage.public_id) {
+    ossDeletePromises.push(
+      deleteFromOSS(req.user.coverImage.public_id).catch((error) =>
+        console.error(`Failed to delete cover image: ${error.message}`)
+      )
+    );
+  }
+
+  await deleteFromOSS(req.user.public_id);
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", getAccessTokenCookieOptions())
+    .clearCookie("refreshToken", getRefreshTokenCookieOptions())
+    .json(new ApiResponse(200, null, "Account deleted successfully"));
+});
+
 export {
   registeruser,
   loginUser,
@@ -500,4 +530,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  deleteAccount,
 };
