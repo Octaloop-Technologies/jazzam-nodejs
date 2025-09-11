@@ -63,6 +63,7 @@ app.use(passport.session());
 // ==========================================================
 import userRouter from "./routes/user.routes.js";
 import leadRouter from "./routes/lead.routes.js";
+import scrapingRouter from "./routes/scraping.route.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -74,6 +75,7 @@ app.use("/api/v1/users/auth", authRateLimit);
 // ==========================================================
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/lead", leadRouter);
+app.use("/api/v1/scraping", scrapingRouter);
 
 // ==========================================================
 // Error handling middleware (must be last)
