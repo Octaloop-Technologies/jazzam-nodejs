@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { Lead } from "../models/lead.model.js";
+import { Validator } from "../utils/validator.js";
 import mongoose from "mongoose";
 
 // Create a new lead
@@ -24,55 +25,120 @@ const createLead = asyncHandler(async (req, res) => {
     tags,
   } = req.body;
 
-  // Validate required fields
-  if (
-    !name ||
-    !email ||
-    !phone ||
-    !company ||
-    !location ||
-    !industry ||
-    !companySize ||
-    !source ||
-    !interests ||
-    !status
-  ) {
-    throw new ApiError(400, "All required fields must be provided");
+  // Define validation rules for bulk validation
+  const validationRules = {
+    name: { type: "required", options: { minLength: 1, maxLength: 100 } },
+    email: { type: "email", required: true },
+    phone: { type: "phone", required: true },
+    company: { type: "required", options: { minLength: 1, maxLength: 100 } },
+    location: { type: "required", options: { minLength: 1, maxLength: 100 } },
+    industry: {
+      type: "enum",
+      allowedValues: [
+        "technology",
+        "healthcare",
+        "finance",
+        "education",
+        "manufacturing",
+        "retail",
+        "real estate",
+        "consulting",
+        "marketing",
+        "legal",
+        "non-profit",
+        "government",
+        "entertainment",
+        "agriculture",
+        "transportation",
+        "energy",
+        "construction",
+        "food & beverage",
+        "telecommunications",
+        "other",
+      ],
+      required: true,
+    },
+    companySize: {
+      type: "enum",
+      allowedValues: [
+        "1-10 employees",
+        "11-50 employees",
+        "51-200 employees",
+        "201-500 employees",
+        "501-1000 employees",
+        "1001-5000 employees",
+        "5000+ employees",
+      ],
+      required: true,
+    },
+    source: {
+      type: "enum",
+      allowedValues: [
+        "website",
+        "social media",
+        "email campaign",
+        "cold outreach",
+        "referral",
+        "event",
+        "advertisement",
+        "content marketing",
+        "seo",
+        "partnership",
+        "direct sales",
+        "linkedin",
+        "other",
+      ],
+      required: true,
+    },
+    interests: { type: "array", options: { minLength: 1, allowEmpty: false } },
+    status: {
+      type: "enum",
+      allowedValues: ["cold", "warm", "hot", "qualified"],
+      required: true,
+    },
+  };
+
+  // Validate all fields at once
+  Validator.validateFields(req.body, validationRules);
+
+  // Validate optional fields if provided
+  if (linkedinProfile) {
+    Validator.validateLinkedInUrl(linkedinProfile, "LinkedIn profile", false);
   }
 
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    throw new ApiError(400, "Invalid email format");
+  if (website) {
+    Validator.validateUrl(website, "Website", false);
   }
 
-  // Validate interests array
-  if (!Array.isArray(interests) || interests.length === 0) {
-    throw new ApiError(400, "At least one interest must be provided");
+  if (assignedTo) {
+    Validator.validateObjectId(assignedTo, "Assigned to", false);
   }
+
+  // Sanitize email for duplicate check
+  const sanitizedEmail = Validator.sanitizeEmail(email);
 
   // Check if lead with same email already exists
-  const existingLead = await Lead.findOne({ email: email.toLowerCase() });
+  const existingLead = await Lead.findOne({ email: sanitizedEmail });
   if (existingLead) {
     throw new ApiError(409, "Lead with this email already exists");
   }
 
   try {
-    // Create the lead
+    // Create the lead with sanitized data
     const lead = await Lead.create({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      phone: phone.trim(),
-      linkedinProfile: linkedinProfile?.trim(),
-      company: company.trim(),
-      location: location.trim(),
-      website: website?.trim(),
+      name: Validator.sanitizeString(name),
+      email: sanitizedEmail,
+      phone: Validator.sanitizePhone(phone),
+      linkedinProfile: Validator.sanitizeString(linkedinProfile),
+      company: Validator.sanitizeString(company),
+      location: Validator.sanitizeString(location),
+      website: Validator.sanitizeString(website),
       industry: industry.toLowerCase(),
       companySize,
       source: source.toLowerCase(),
       interests,
       status: status ? status.toLowerCase() : "cold",
-      notes: notes?.trim(),
+      notes: Validator.sanitizeString(notes),
       assignedTo: assignedTo || null,
       tags: tags || [],
     });

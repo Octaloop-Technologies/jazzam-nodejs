@@ -4,6 +4,7 @@ import { uploadToOSS, deleteFromOSS } from "../utils/oss.js";
 import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { Validator } from "../utils/validator.js";
 import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
@@ -29,10 +30,15 @@ const generateAccessAndRefreshToken = async (userId) => {
 const registeruser = asyncHandler(async (req, res) => {
   const { name, email, fullName, password } = req.body;
 
-  // validate user input
-  if ([name, email, fullName, password].some((field) => field?.trim() === "")) {
-    throw new ApiError(400, "All fields are required");
-  }
+  // Validate required fields using validator
+  const validationRules = {
+    name: { type: "required", options: { minLength: 3, maxLength: 30 } },
+    email: { type: "email", required: true },
+    fullName: { type: "required", options: { minLength: 2, maxLength: 50 } },
+    password: { type: "required", options: { minLength: 6, maxLength: 128 } },
+  };
+
+  Validator.validateFields(req.body, validationRules);
 
   // Check if User or email already exists
   const existingUser = await User.findOne({
@@ -102,10 +108,18 @@ const registeruser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { email, name, password } = req.body;
 
-  // validate user input
+  // Validate login input - either email or name is required
   if (!email && !name) {
-    throw new ApiError(400, "name and email is required");
+    throw new ApiError(400, "Either username or email is required");
   }
+
+  // Validate email format if provided
+  if (email) {
+    Validator.validateEmail(email, "Email");
+  }
+
+  // Validate password
+  Validator.validateRequired(password, "Password");
 
   // Check if User or email already exists
   const user = await User.findOne({
@@ -409,9 +423,13 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 const updateAccountDetails = asyncHandler(async (req, res) => {
   const { email, fullName } = req.body;
 
-  if (!email || !fullName) {
-    throw new ApiError(400, "All fields are required");
-  }
+  // Validate account update fields
+  const validationRules = {
+    email: { type: "email", required: true },
+    fullName: { type: "required", options: { minLength: 2, maxLength: 50 } },
+  };
+
+  Validator.validateFields(req.body, validationRules);
 
   const user = await User.findByIdAndUpdate(
     req.user._id,
