@@ -1,0 +1,49 @@
+name: Node.js CI/CD with Docker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create .env file from GitHub Secrets
+        run: |
+          echo "${{ secrets.DOCKER_ENV_FILE }}" > /home/jazzam/actions-runner/jazzaam-nodejs/.env
+          echo ".env file created successfully."
+
+      - name: Build Docker Image
+        run: |
+          cd /home/jazzam/actions-runner/jazzaam-nodejs
+          sudo -u jazzam docker build -t jazzam-nodejs-image:latest .
+
+      - name: Stop & Remove Existing Container
+        run: |
+          CONTAINER_ID=$(sudo -u jazzam docker ps -aq --filter "name=jazzam-backend-container")
+          if [ ! -z "$CONTAINER_ID" ]; then
+            sudo -u jazzam docker stop jazzam-backend-container
+            sudo -u jazzam docker rm jazzam-backend-container
+          fi
+
+      - name: Run New Container
+        run: |
+          sudo -u jazzam docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
+
+      - name: Prune Unused Images & Containers
+        run: |
+          sudo -u jazzam docker system prune -af
+
+  nginx:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Nginx Configuration
+        run: |
+          sudo nginx -t
+          sudo systemctl restart nginx
