@@ -15,12 +15,13 @@ jobs:
 
       - name: Create .env file from GitHub Secrets
         run: |
-          echo "${{ secrets.DOCKER_ENV_FILE }}" > /home/jazzam/actions-runner/jazzaam-nodejs/.env
+          echo "${{ secrets.DOCKER_ENV_FILE }}" > /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs/.env
           echo ".env file created successfully."
 
       - name: Build Docker Image
         run: |
-          cd /home/jazzam/actions-runner/jazzaam-nodejs
+          cd /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs
+
           sudo -u jazzam docker build -t jazzam-nodejs-image:latest .
 
       - name: Stop & Remove Existing Container
