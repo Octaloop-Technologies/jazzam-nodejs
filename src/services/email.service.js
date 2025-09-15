@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { ApiError } from "../utils/apiError.js";
+import { ApiError } from "../utils/ApiError.js";
 import { Validator } from "../utils/validator.js";
 import {
   generateWaitlistNotificationTemplate,
