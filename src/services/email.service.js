@@ -67,11 +67,6 @@ class EmailService {
         `Missing required environment variables: ${missingVars.join(", ")}`
       );
     }
-    Validator.validateEmail(process.env.EMAIL_USER, "EMAIL_USER");
-    Validator.validateEmail(
-      process.env.EMAIL_APP_PASSWORD,
-      "EMAIL_APP_PASSWORD"
-    );
   }
 
   // ================================================
