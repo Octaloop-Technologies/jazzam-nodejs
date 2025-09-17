@@ -5,154 +5,170 @@ import { Lead } from "../models/lead.model.js";
 import { Validator } from "../utils/validator.js";
 import mongoose from "mongoose";
 
+const apiKey = process.env.APIFY_KEY;
+
 // Create a new lead
 const createLead = asyncHandler(async (req, res) => {
-  const {
-    name,
-    email,
-    phone,
-    linkedinProfile,
-    company,
-    location,
-    website,
-    industry,
-    companySize,
-    source,
-    interests,
-    status,
-    notes,
-    assignedTo,
-    tags,
-  } = req.body;
-
-  // Define validation rules for bulk validation
-  const validationRules = {
-    name: { type: "required", options: { minLength: 1, maxLength: 100 } },
-    email: { type: "email", required: true },
-    phone: { type: "phone", required: true },
-    company: { type: "required", options: { minLength: 1, maxLength: 100 } },
-    location: { type: "required", options: { minLength: 1, maxLength: 100 } },
-    industry: {
-      type: "enum",
-      allowedValues: [
-        "technology",
-        "healthcare",
-        "finance",
-        "education",
-        "manufacturing",
-        "retail",
-        "real estate",
-        "consulting",
-        "marketing",
-        "legal",
-        "non-profit",
-        "government",
-        "entertainment",
-        "agriculture",
-        "transportation",
-        "energy",
-        "construction",
-        "food & beverage",
-        "telecommunications",
-        "other",
-      ],
-      required: true,
-    },
-    companySize: {
-      type: "enum",
-      allowedValues: [
-        "1-10 employees",
-        "11-50 employees",
-        "51-200 employees",
-        "201-500 employees",
-        "501-1000 employees",
-        "1001-5000 employees",
-        "5000+ employees",
-      ],
-      required: true,
-    },
-    source: {
-      type: "enum",
-      allowedValues: [
-        "website",
-        "social media",
-        "email campaign",
-        "cold outreach",
-        "referral",
-        "event",
-        "advertisement",
-        "content marketing",
-        "seo",
-        "partnership",
-        "direct sales",
-        "linkedin",
-        "other",
-      ],
-      required: true,
-    },
-    interests: { type: "array", options: { minLength: 1, allowEmpty: false } },
-    status: {
-      type: "enum",
-      allowedValues: ["cold", "warm", "hot", "qualified"],
-      required: true,
-    },
-  };
-
-  // Validate all fields at once
-  Validator.validateFields(req.body, validationRules);
+  const { linkedinProfileUrl } = req.body;
 
   // Validate optional fields if provided
-  if (linkedinProfile) {
-    Validator.validateLinkedInUrl(linkedinProfile, "LinkedIn profile", false);
+  if (linkedinProfileUrl) {
+    Validator.validateLinkedInUrl(linkedinProfileUrl, "LinkedIn profile", true);
   }
 
-  if (website) {
-    Validator.validateUrl(website, "Website", false);
-  }
-
-  if (assignedTo) {
-    Validator.validateObjectId(assignedTo, "Assigned to", false);
-  }
-
-  // Sanitize email for duplicate check
-  const sanitizedEmail = Validator.sanitizeEmail(email);
-
-  // Check if lead with same email already exists
-  const existingLead = await Lead.findOne({ email: sanitizedEmail });
+  // Check if lead with same linkedin profile URL already exists then update it
+  const existingLead = await Lead.findOne({ linkedinProfileUrl });
   if (existingLead) {
-    throw new ApiError(409, "Lead with this email already exists");
-  }
-
-  try {
-    // Create the lead with sanitized data
-    const lead = await Lead.create({
-      name: Validator.sanitizeString(name),
-      email: sanitizedEmail,
-      phone: Validator.sanitizePhone(phone),
-      linkedinProfile: Validator.sanitizeString(linkedinProfile),
-      company: Validator.sanitizeString(company),
-      location: Validator.sanitizeString(location),
-      website: Validator.sanitizeString(website),
-      industry: industry.toLowerCase(),
-      companySize,
-      source: source.toLowerCase(),
-      interests,
-      status: status ? status.toLowerCase() : "cold",
-      notes: Validator.sanitizeString(notes),
-      assignedTo: assignedTo || null,
-      tags: tags || [],
-    });
-
+    await existingLead.updateOne({ linkedinProfileUrl });
     return res
-      .status(201)
-      .json(new ApiResponse(201, lead, "Lead created successfully"));
-  } catch (error) {
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((err) => err.message);
-      throw new ApiError(400, `Validation error: ${messages.join(", ")}`);
-    }
-    throw new ApiError(500, "Error creating lead");
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          existingLead,
+          "You have already submitted your LinkedIn profile URL"
+        )
+      );
   }
+
+  // Step 1: Start Actor
+  const startResponse = await fetch(
+    `https://api.apify.com/v2/acts/dev_fusion~linkedin-profile-scraper/runs?token=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profileUrls: [linkedinProfileUrl],
+      }),
+    }
+  );
+  const startData = await startResponse.json();
+
+  if (!startData.data || !startData.data.id) {
+    throw new ApiError(500, "Failed to start Apify actor");
+  }
+
+  const runId = startData.data.id;
+
+  // Step 2: Poll until run is finished
+  let runStatus = "READY";
+  let datasetId = null;
+
+  while (["READY", "RUNNING"].includes(runStatus)) {
+    const runResponse = await fetch(
+      `https://api.apify.com/v2/actor-runs/${runId}?token=${apiKey}`
+    );
+    const runData = await runResponse.json();
+
+    runStatus = runData.data.status;
+    datasetId = runData.data.defaultDatasetId;
+
+    if (["SUCCEEDED", "FAILED", "ABORTED"].includes(runStatus)) break;
+
+    await new Promise((r) => setTimeout(r, 5000)); // wait 5 sec before checking again
+  }
+
+  if (runStatus !== "SUCCEEDED") {
+    throw new ApiError(500, `Apify run ended with status: ${runStatus}`);
+  }
+
+  // Step 3: Fetch dataset items
+  const datasetResponse = await fetch(
+    `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiKey}&format=json`
+  );
+  const results = await datasetResponse.json();
+
+  // Create the lead with sanitized data
+  // Apify returns an array of results, so use the first item
+  const profile = Array.isArray(results) ? results[0] : results;
+
+  const lead = await Lead.create({
+    // Basic LinkedIn Profile Information
+    linkedinProfileUrl: linkedinProfileUrl,
+    firstName: profile.firstName || null,
+    lastName: profile.lastName || null,
+    fullName: profile.fullName || null,
+    headline: profile.headline || null,
+    email: profile.email || null,
+    phone: profile.mobileNumber || null,
+    followers: profile.followers || 0,
+    connections: profile.connections || 0,
+    publicIdentifier: profile.publicIdentifier || null,
+    urn: profile.urn || null,
+
+    // Company Information
+    company: profile.companyName || null,
+    companyIndustry: profile.companyIndustry || null,
+    companyWebsite: profile.companyWebsite || null,
+    companyLinkedin: profile.companyLinkedin || null,
+    companyFoundedIn: profile.companyFoundedIn || null,
+    companySize: profile.companySize || null,
+
+    // Job Information
+    jobTitle: profile.jobTitle || null,
+    currentJobDuration: profile.currentJobDuration || null,
+    currentJobDurationInYrs: profile.currentJobDurationInYrs || null,
+
+    // Location Information
+    location:
+      profile.addressWithCountry ||
+      profile.addressCountryOnly ||
+      profile.addressWithoutCountry ||
+      null,
+    addressCountryOnly: profile.addressCountryOnly || null,
+    addressWithCountry: profile.addressWithCountry || null,
+    addressWithoutCountry: profile.addressWithoutCountry || null,
+
+    // Profile Media
+    profilePic: profile.profilePic || null,
+    profilePicHighQuality: profile.profilePicHighQuality || null,
+    profilePicAllDimensions: profile.profilePicAllDimensions || [],
+
+    // Profile Content
+    about: profile.about || null,
+    creatorWebsite: profile.creatorWebsite || null,
+
+    // Professional Data Arrays
+    experiences: profile.experiences || [],
+    educations: profile.educations || [],
+    skills: profile.skills || [],
+    languages: profile.languages || [],
+    interests: profile.interests || [],
+
+    // Additional Arrays
+    licenseAndCertificates: profile.licenseAndCertificates || [],
+    honorsAndAwards: profile.honorsAndAwards || [],
+    volunteerAndAwards: profile.volunteerAndAwards || [],
+    verifications: profile.verifications || [],
+    promos: profile.promos || [],
+    highlights: profile.highlights || [],
+    projects: profile.projects || [],
+    publications: profile.publications || [],
+    patents: profile.patents || [],
+    courses: profile.courses || [],
+    testScores: profile.testScores || [],
+    organizations: profile.organizations || [],
+    volunteerCauses: profile.volunteerCauses || [],
+    recommendations: profile.recommendations || [],
+    updates: profile.updates || [],
+
+    // Lead Management Fields
+    status: "new",
+    notes: "",
+    assignedTo: null,
+    tags: [],
+  });
+
+  // Step 4: Return final results
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        lead,
+        "Your LinkedIn profile has been scraped and saved successfully"
+      )
+    );
 });
 
 // Get all leads with pagination, filtering, and sorting
@@ -161,23 +177,18 @@ const getLeads = asyncHandler(async (req, res) => {
     page = 0,
     limit = 10,
     status,
-    industry,
-    source,
+    companyIndustry,
     companySize,
     assignedTo,
     sortBy = "createdAt",
     sortOrder = "desc",
-    isActive = true,
   } = req.query;
 
   // Build match conditions
-  const matchConditions = {
-    isActive: isActive === "true" || isActive === true,
-  };
+  const matchConditions = {};
 
   if (status) matchConditions.status = status;
-  if (industry) matchConditions.industry = industry;
-  if (source) matchConditions.source = source;
+  if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (companySize) matchConditions.companySize = companySize;
   if (assignedTo)
     matchConditions.assignedTo =
@@ -276,13 +287,11 @@ const searchLeads = asyncHandler(async (req, res) => {
 
   // Build match conditions
   const matchConditions = {
-    isActive: true,
     $text: { $search: query.trim() },
   };
 
   if (status) matchConditions.status = status;
-  if (industry) matchConditions.industry = industry;
-  if (source) matchConditions.source = source;
+  if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
 
   // Build sort object
   const sortObj = { score: { $meta: "textScore" } };
@@ -369,7 +378,7 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
 const getLeadStats = asyncHandler(async (req, res) => {
   try {
     const stats = await Lead.aggregate([
-      { $match: { isActive: true } },
+      { $match: { status: { $ne: null } } },
       {
         $group: {
           _id: null,
@@ -397,16 +406,17 @@ const getLeadStats = asyncHandler(async (req, res) => {
     ]);
 
     const industryStats = await Lead.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: "$industry", count: { $sum: 1 } } },
+      { $match: { status: { $ne: null } } },
+      { $group: { _id: "$companyIndustry", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
-    const sourceStats = await Lead.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: "$source", count: { $sum: 1 } } },
+    const locationStats = await Lead.aggregate([
+      { $match: { status: { $ne: null } } },
+      { $group: { _id: "$location", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
+      { $limit: 10 },
     ]);
 
     const result = {
@@ -419,7 +429,7 @@ const getLeadStats = asyncHandler(async (req, res) => {
         avgLeadScore: 0,
       },
       industryBreakdown: industryStats,
-      sourceBreakdown: sourceStats,
+      locationBreakdown: locationStats,
     };
 
     return res
@@ -441,11 +451,7 @@ const deleteLead = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findByIdAndUpdate(
-      id,
-      { isActive: false },
-      { new: true }
-    );
+    const lead = await Lead.findByIdAndDelete(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -453,7 +459,7 @@ const deleteLead = asyncHandler(async (req, res) => {
 
     return res
       .status(200)
-      .json(new ApiResponse(200, lead, "Lead deleted successfully"));
+      .json(new ApiResponse(200, null, "Lead deleted successfully"));
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(500, "Error deleting lead");

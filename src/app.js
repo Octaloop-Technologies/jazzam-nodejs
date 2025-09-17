@@ -63,7 +63,6 @@ app.use(passport.session());
 // ==========================================================
 import userRouter from "./routes/user.routes.js";
 import leadRouter from "./routes/lead.routes.js";
-import scrapingRouter from "./routes/scraping.route.js";
 import waitlistRouter from "./routes/waitlist.routes.js";
 
 // ==========================================================
@@ -72,11 +71,62 @@ import waitlistRouter from "./routes/waitlist.routes.js";
 app.use("/api/v1/users/auth", authRateLimit);
 
 // ==========================================================
+// Root route - API health check
+// ==========================================================
+app.get("/", (req, res) => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  const response = {
+    success: true,
+    message: "Lead Management API is running",
+    ...(isProduction
+      ? {}
+      : {
+          version: "1.0.0",
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV || "development",
+        }),
+  };
+
+  res.status(200).json(response);
+});
+
+// ==========================================================
+// API health check endpoint
+// ==========================================================
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API is healthy",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ==========================================================
+// API documentation endpoint (development only)
+// ==========================================================
+if (process.env.NODE_ENV !== "production") {
+  app.get("/api-docs", (req, res) => {
+    res.status(200).json({
+      success: true,
+      message: "API Documentation",
+      endpoints: {
+        auth: "/api/v1/users/auth",
+        users: "/api/v1/users",
+        leads: "/api/v1/lead",
+        waitlist: "/api/v1/waitlist",
+        health: "/health",
+      },
+      version: "1.0.0",
+    });
+  });
+}
+
+// ==========================================================
 // Routes Declaration
 // ==========================================================
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/lead", leadRouter);
-app.use("/api/v1/scraping", scrapingRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
 
 // ==========================================================
