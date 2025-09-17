@@ -7,9 +7,21 @@ import mongoose from "mongoose";
 
 const apiKey = process.env.APIFY_KEY;
 
+if (!apiKey) {
+  console.error("APIFY_KEY environment variable is not set");
+}
+
 // Create a new lead
 const createLead = asyncHandler(async (req, res) => {
   const { linkedinProfileUrl } = req.body;
+
+  // Check if API key is available
+  if (!apiKey) {
+    throw new ApiError(
+      500,
+      "LinkedIn scraping service is not configured. Please contact support."
+    );
+  }
 
   // Validate optional fields if provided
   if (linkedinProfileUrl) {
@@ -42,9 +54,21 @@ const createLead = asyncHandler(async (req, res) => {
       }),
     }
   );
+
+  if (!startResponse.ok) {
+    console.error(
+      "Apify start request failed:",
+      startResponse.status,
+      startResponse.statusText
+    );
+    throw new ApiError(500, "Failed to start LinkedIn scraping process");
+  }
+
   const startData = await startResponse.json();
+  console.log("Apify start response:", JSON.stringify(startData, null, 2));
 
   if (!startData.data || !startData.data.id) {
+    console.error("Invalid Apify start response:", startData);
     throw new ApiError(500, "Failed to start Apify actor");
   }
 
@@ -76,11 +100,31 @@ const createLead = asyncHandler(async (req, res) => {
   const datasetResponse = await fetch(
     `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiKey}&format=json`
   );
+
+  if (!datasetResponse.ok) {
+    console.error(
+      "Apify dataset fetch failed:",
+      datasetResponse.status,
+      datasetResponse.statusText
+    );
+    throw new ApiError(500, "Failed to fetch LinkedIn profile data");
+  }
+
   const results = await datasetResponse.json();
+  console.log("Apify results:", JSON.stringify(results, null, 2));
 
   // Create the lead with sanitized data
   // Apify returns an array of results, so use the first item
   const profile = Array.isArray(results) ? results[0] : results;
+
+  // Check if profile data exists
+  if (!profile || typeof profile !== "object") {
+    console.log("Profile data is missing or invalid:", profile);
+    throw new ApiError(
+      500,
+      "No LinkedIn profile data found. The profile might be private or the URL is invalid."
+    );
+  }
 
   const lead = await Lead.create({
     // Basic LinkedIn Profile Information
