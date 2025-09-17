@@ -222,21 +222,65 @@ const leadSchema = new Schema(
     ],
 
     // Additional Arrays
-    licenseAndCertificates: [Schema.Types.Mixed],
-    honorsAndAwards: [Schema.Types.Mixed],
-    volunteerAndAwards: [Schema.Types.Mixed],
-    verifications: [Schema.Types.Mixed],
-    promos: [Schema.Types.Mixed],
-    highlights: [Schema.Types.Mixed],
-    projects: [Schema.Types.Mixed],
-    publications: [Schema.Types.Mixed],
-    patents: [Schema.Types.Mixed],
-    courses: [Schema.Types.Mixed],
-    testScores: [Schema.Types.Mixed],
-    organizations: [Schema.Types.Mixed],
-    volunteerCauses: [Schema.Types.Mixed],
-    recommendations: [Schema.Types.Mixed],
-    updates: [Schema.Types.Mixed],
+    // licenseAndCertificates: [Schema.Types.Mixed],
+    // honorsAndAwards: [Schema.Types.Mixed],
+    // volunteerAndAwards: [Schema.Types.Mixed],
+    // verifications: [Schema.Types.Mixed],
+    // promos: [Schema.Types.Mixed],
+    // highlights: [Schema.Types.Mixed],
+    // projects: [Schema.Types.Mixed],
+    // publications: [Schema.Types.Mixed],
+    // patents: [Schema.Types.Mixed],
+    // courses: [Schema.Types.Mixed],
+    // testScores: [Schema.Types.Mixed],
+    // organizations: [Schema.Types.Mixed],
+    // volunteerCauses: [Schema.Types.Mixed],
+    // recommendations: [Schema.Types.Mixed],
+    // updates: [Schema.Types.Mixed],
+
+    // BANT (Budget, Authority, Need, Timeline) Lead Qualification Fields
+    bant: {
+      budget: {
+        type: String, // e.g., "$50K - $100K"
+        trim: true,
+      },
+      budgetStatus: {
+        type: String, // e.g., "Qualified", "Unqualified"
+        trim: true,
+      },
+      authority: {
+        isDecisionMaker: {
+          type: Boolean,
+          default: false,
+        },
+        authorityStatus: {
+          type: String, // e.g., "High", "Low"
+          trim: true,
+        },
+      },
+      need: {
+        needsList: [
+          {
+            type: String, // e.g., "Scaling challenges", "Team coordination"
+            trim: true,
+          },
+        ],
+        needStatus: {
+          type: String, // e.g., "Urgent", "Normal"
+          trim: true,
+        },
+      },
+      timeline: {
+        expectedTimeframe: {
+          type: String, // e.g., "Q1 2025"
+          trim: true,
+        },
+        timelineStatus: {
+          type: String, // e.g., "Soon", "Delayed"
+          trim: true,
+        },
+      },
+    },
 
     // Lead Management Fields
     status: {
@@ -282,7 +326,6 @@ const leadSchema = new Schema(
 leadSchema.index({ email: 1, company: 1 });
 leadSchema.index({ status: 1, companyIndustry: 1 });
 leadSchema.index({ createdAt: -1 });
-leadSchema.index({ linkedinProfileUrl: 1 });
 leadSchema.index({
   fullName: "text",
   company: "text",

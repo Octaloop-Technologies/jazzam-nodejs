@@ -65,7 +65,6 @@ const createLead = asyncHandler(async (req, res) => {
   }
 
   const startData = await startResponse.json();
-  console.log("Apify start response:", JSON.stringify(startData, null, 2));
 
   if (!startData.data || !startData.data.id) {
     console.error("Invalid Apify start response:", startData);
@@ -111,7 +110,6 @@ const createLead = asyncHandler(async (req, res) => {
   }
 
   const results = await datasetResponse.json();
-  console.log("Apify results:", JSON.stringify(results, null, 2));
 
   // Create the lead with sanitized data
   // Apify returns an array of results, so use the first item
