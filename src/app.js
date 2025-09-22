@@ -64,6 +64,7 @@ app.use(passport.session());
 import userRouter from "./routes/user.routes.js";
 import leadRouter from "./routes/lead.routes.js";
 import waitlistRouter from "./routes/waitlist.routes.js";
+import webhookRouter from "./routes/webhook.routes.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -115,6 +116,7 @@ if (process.env.NODE_ENV !== "production") {
         users: "/api/v1/users",
         leads: "/api/v1/lead",
         waitlist: "/api/v1/waitlist",
+        webhook: "/api/v1/webhook",
         health: "/health",
       },
       version: "1.0.0",
@@ -128,6 +130,7 @@ if (process.env.NODE_ENV !== "production") {
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/lead", leadRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
+app.use("/api/v1/webhook", webhookRouter);
 
 // ==========================================================
 // Error handling middleware (must be last)

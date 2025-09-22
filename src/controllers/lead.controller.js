@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { Lead } from "../models/lead.model.js";
 import { Validator } from "../utils/validator.js";
 import mongoose from "mongoose";
+import webhookService from "../services/webhook.service.js";
 
 const apiKey = process.env.APIFY_KEY;
 
@@ -201,7 +202,27 @@ const createLead = asyncHandler(async (req, res) => {
     tags: [],
   });
 
-  // Step 4: Return final results
+  // Step 4: Send webhook notification (async, don't wait for response)
+  webhookService
+    .sendLeadToWebhook(lead)
+    .then((result) => {
+      if (result.success) {
+        console.log(`[Webhook] Lead ${lead._id} successfully sent to Make.com`);
+      } else {
+        console.error(
+          `[Webhook] Failed to send lead ${lead._id} to Make.com:`,
+          result.error
+        );
+      }
+    })
+    .catch((error) => {
+      console.error(
+        `[Webhook] Unexpected error sending lead ${lead._id} to Make.com:`,
+        error
+      );
+    });
+
+  // Step 5: Return final results
   return res
     .status(200)
     .json(
@@ -406,6 +427,28 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
     }
 
     await lead.updateStatus(status, notes);
+
+    // Send webhook notification for lead update (async, don't wait for response)
+    webhookService
+      .sendLeadToWebhook(lead)
+      .then((result) => {
+        if (result.success) {
+          console.log(
+            `[Webhook] Lead update ${lead._id} successfully sent to Make.com`
+          );
+        } else {
+          console.error(
+            `[Webhook] Failed to send lead update ${lead._id} to Make.com:`,
+            result.error
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          `[Webhook] Unexpected error sending lead update ${lead._id} to Make.com:`,
+          error
+        );
+      });
 
     return res
       .status(200)

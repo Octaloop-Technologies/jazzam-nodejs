@@ -239,48 +239,48 @@ const leadSchema = new Schema(
     // updates: [Schema.Types.Mixed],
 
     // BANT (Budget, Authority, Need, Timeline) Lead Qualification Fields
-    bant: {
-      budget: {
-        type: String, // e.g., "$50K - $100K"
-        trim: true,
-      },
-      budgetStatus: {
-        type: String, // e.g., "Qualified", "Unqualified"
-        trim: true,
-      },
-      authority: {
-        isDecisionMaker: {
-          type: Boolean,
-          default: false,
-        },
-        authorityStatus: {
-          type: String, // e.g., "High", "Low"
-          trim: true,
-        },
-      },
-      need: {
-        needsList: [
-          {
-            type: String, // e.g., "Scaling challenges", "Team coordination"
-            trim: true,
-          },
-        ],
-        needStatus: {
-          type: String, // e.g., "Urgent", "Normal"
-          trim: true,
-        },
-      },
-      timeline: {
-        expectedTimeframe: {
-          type: String, // e.g., "Q1 2025"
-          trim: true,
-        },
-        timelineStatus: {
-          type: String, // e.g., "Soon", "Delayed"
-          trim: true,
-        },
-      },
-    },
+    // bant: {
+    //   budget: {
+    //     type: String, // e.g., "$50K - $100K"
+    //     trim: true,
+    //   },
+    //   budgetStatus: {
+    //     type: String, // e.g., "Qualified", "Unqualified"
+    //     trim: true,
+    //   },
+    //   authority: {
+    //     isDecisionMaker: {
+    //       type: Boolean,
+    //       default: false,
+    //     },
+    //     authorityStatus: {
+    //       type: String, // e.g., "High", "Low"
+    //       trim: true,
+    //     },
+    //   },
+    //   need: {
+    //     needsList: [
+    //       {
+    //         type: String, // e.g., "Scaling challenges", "Team coordination"
+    //         trim: true,
+    //       },
+    //     ],
+    //     needStatus: {
+    //       type: String, // e.g., "Urgent", "Normal"
+    //       trim: true,
+    //     },
+    //   },
+    //   timeline: {
+    //     expectedTimeframe: {
+    //       type: String, // e.g., "Q1 2025"
+    //       trim: true,
+    //     },
+    //     timelineStatus: {
+    //       type: String, // e.g., "Soon", "Delayed"
+    //       trim: true,
+    //     },
+    //   },
+    // },
 
     // Lead Management Fields
     status: {
@@ -310,12 +310,12 @@ const leadSchema = new Schema(
     nextFollowUpDate: {
       type: Date,
     },
-    leadScore: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 100,
-    },
+    // leadScore: {
+    //   type: Number,
+    //   default: 0,
+    //   min: 0,
+    //   max: 100,
+    // },
   },
   {
     timestamps: true,
