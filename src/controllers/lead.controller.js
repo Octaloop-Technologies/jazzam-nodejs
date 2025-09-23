@@ -332,21 +332,24 @@ const getLeadById = asyncHandler(async (req, res) => {
 });
 
 const updateLeadById = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const payload = req.body;
+  const { email, BANT } = req.body;
+
+  if (!email) {
+    throw new ApiError(400, "Email is required to update lead");
+  }
 
   try {
     // Map request body to lead schema fields
     const updateFields = {
-      "bant.budget.value": payload?.BANT?.Budget?.Value,
-      "bant.budget.score": payload?.BANT?.Budget?.Score,
-      "bant.authority.value": payload?.BANT?.Authority?.Value,
-      "bant.authority.isDecisionMaker": payload?.BANT?.Authority?.IsDecisionMaker,
-      "bant.authority.score": payload?.BANT?.Authority?.Score,
-      "bant.need.value": payload?.BANT?.Need?.Value,
-      "bant.need.score": payload?.BANT?.Need?.Score,
-      "bant.timeline.value": payload?.BANT?.Timeline?.Value,
-      "bant.timeline.score": payload?.BANT?.Timeline?.Score,
+      "bant.budget.value": BANT?.Budget?.Value,
+      "bant.budget.score": BANT?.Budget?.Score,
+      "bant.authority.value": BANT?.Authority?.Value,
+      "bant.authority.isDecisionMaker": BANT?.Authority?.IsDecisionMaker,
+      "bant.authority.score": BANT?.Authority?.Score,
+      "bant.need.value": BANT?.Need?.Value,
+      "bant.need.score": BANT?.Need?.Score,
+      "bant.timeline.value": BANT?.Timeline?.Value,
+      "bant.timeline.score": BANT?.Timeline?.Score,
     };
 
     // Remove undefined fields so they don’t overwrite existing values
@@ -354,14 +357,14 @@ const updateLeadById = asyncHandler(async (req, res) => {
       (key) => updateFields[key] === undefined && delete updateFields[key]
     );
 
-    const updatedLead = await Lead.findByIdAndUpdate(
-      id,
+    const updatedLead = await Lead.findOneAndUpdate(
+      { email },
       { $set: updateFields },
       { new: true }
     );
 
     if (!updatedLead) {
-      throw new ApiError(404, "Lead not found");
+      throw new ApiError(404, `Lead with email ${email} not found`);
     }
 
     return res
@@ -371,6 +374,7 @@ const updateLeadById = asyncHandler(async (req, res) => {
     throw new ApiError(500, error.message || "Failed to update lead");
   }
 });
+
 // Search leads by text query
 const searchLeads = asyncHandler(async (req, res) => {
   const {

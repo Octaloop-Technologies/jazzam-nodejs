@@ -42,7 +42,7 @@ router.route("/:id").get(getLeadById);
 
 // Update lead bant object
 // PATCH /api/v1/lead/:id
-router.route("/:id").patch(updateLeadById)
+router.route("/").patch(updateLeadById)
 
 // Update lead status and notes
 // PATCH /api/v1/lead/:id/status
