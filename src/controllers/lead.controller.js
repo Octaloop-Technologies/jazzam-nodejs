@@ -332,10 +332,10 @@ const getLeadById = asyncHandler(async (req, res) => {
 });
 
 const updateLeadById = asyncHandler(async (req, res) => {
-  const { email, BANT } = req.body;
+  const { fullName, BANT } = req.body;
 
-  if (!email) {
-    throw new ApiError(400, "Email is required to update lead");
+  if (!fullName) {
+    throw new ApiError(400, "fullName is required to update lead");
   }
 
   try {
@@ -358,13 +358,13 @@ const updateLeadById = asyncHandler(async (req, res) => {
     );
 
     const updatedLead = await Lead.findOneAndUpdate(
-      { email },
+      { fullName },
       { $set: updateFields },
       { new: true }
     );
 
     if (!updatedLead) {
-      throw new ApiError(404, `Lead with email ${email} not found`);
+      throw new ApiError(404, `Lead with fullName "${fullName}" not found`);
     }
 
     return res

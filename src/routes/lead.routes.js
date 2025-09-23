@@ -16,6 +16,10 @@ const router = Router();
 // ================================================
 // Public route - Create lead (for form submission)
 // ================================================
+// Update lead bant object
+// PATCH /api/v1/lead/:id
+router.route("/").patch(updateLeadById)
+
 // POST /api/v1/lead/create
 router.route("/create").post(createLead);
 
@@ -40,9 +44,6 @@ router.route("/stats").get(getLeadStats);
 // GET /api/v1/lead/:id
 router.route("/:id").get(getLeadById);
 
-// Update lead bant object
-// PATCH /api/v1/lead/:id
-router.route("/").patch(updateLeadById)
 
 // Update lead status and notes
 // PATCH /api/v1/lead/:id/status

@@ -250,7 +250,7 @@ const leadSchema = new Schema(
       // },
       authority: {
         isDecisionMaker: {
-          type: String,
+          type: Boolean,
           default: false,
         },
         // authorityStatus: {
