@@ -331,6 +331,46 @@ const getLeadById = asyncHandler(async (req, res) => {
   }
 });
 
+const updateLeadById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const payload = req.body;
+
+  try {
+    // Map request body to lead schema fields
+    const updateFields = {
+      "bant.budget.value": payload?.BANT?.Budget?.Value,
+      "bant.budget.score": payload?.BANT?.Budget?.Score,
+      "bant.authority.value": payload?.BANT?.Authority?.Value,
+      "bant.authority.isDecisionMaker": payload?.BANT?.Authority?.IsDecisionMaker,
+      "bant.authority.score": payload?.BANT?.Authority?.Score,
+      "bant.need.value": payload?.BANT?.Need?.Value,
+      "bant.need.score": payload?.BANT?.Need?.Score,
+      "bant.timeline.value": payload?.BANT?.Timeline?.Value,
+      "bant.timeline.score": payload?.BANT?.Timeline?.Score,
+    };
+
+    // Remove undefined fields so they don’t overwrite existing values
+    Object.keys(updateFields).forEach(
+      (key) => updateFields[key] === undefined && delete updateFields[key]
+    );
+
+    const updatedLead = await Lead.findByIdAndUpdate(
+      id,
+      { $set: updateFields },
+      { new: true }
+    );
+
+    if (!updatedLead) {
+      throw new ApiError(404, "Lead not found");
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, updatedLead, "Lead updated successfully"));
+  } catch (error) {
+    throw new ApiError(500, error.message || "Failed to update lead");
+  }
+});
 // Search leads by text query
 const searchLeads = asyncHandler(async (req, res) => {
   const {
@@ -555,6 +595,7 @@ export {
   createLead,
   getLeads,
   getLeadById,
+  updateLeadById,
   searchLeads,
   updateLeadStatus,
   getLeadStats,

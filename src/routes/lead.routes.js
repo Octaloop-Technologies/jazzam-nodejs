@@ -4,6 +4,7 @@ import {
   getLeads,
   createLead,
   getLeadById,
+  updateLeadById,
   searchLeads,
   updateLeadStatus,
   getLeadStats,
@@ -38,6 +39,10 @@ router.route("/stats").get(getLeadStats);
 // Get single lead by ID
 // GET /api/v1/lead/:id
 router.route("/:id").get(getLeadById);
+
+// Update lead bant object
+// PATCH /api/v1/lead/:id
+router.route("/:id").patch(updateLeadById)
 
 // Update lead status and notes
 // PATCH /api/v1/lead/:id/status
