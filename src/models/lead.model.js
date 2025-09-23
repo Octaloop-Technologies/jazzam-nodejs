@@ -309,11 +309,6 @@ const leadSchema = new Schema(
       },
     },
 
-    totalScore: {
-      type: Number,
-      default: 0,
-    },
-
     category: {
       type: String
     },
@@ -346,12 +341,12 @@ const leadSchema = new Schema(
     nextFollowUpDate: {
       type: Date,
     },
-    // leadScore: {
-    //   type: Number,
-    //   default: 0,
-    //   min: 0,
-    //   max: 100,
-    // },
+    leadScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
   },
   {
     timestamps: true,

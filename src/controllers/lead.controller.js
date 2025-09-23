@@ -332,7 +332,7 @@ const getLeadById = asyncHandler(async (req, res) => {
 });
 
 const updateLeadById = asyncHandler(async (req, res) => {
-  const { fullName, BANT, score, category } = req.body;
+  const { fullName, BANT, Score, Category } = req.body;
 
   if (!fullName) {
     throw new ApiError(400, "fullName is required to update lead");
@@ -350,8 +350,8 @@ const updateLeadById = asyncHandler(async (req, res) => {
       "bant.need.score": BANT?.Need?.Score,
       "bant.timeline.value": BANT?.Timeline?.Value,
       "bant.timeline.score": BANT?.Timeline?.Score,
-      "totalScore": score,
-      "category": category,
+      "leadScore": Score,
+      "category": Category,
     };
 
     // Remove undefined fields so they don’t overwrite existing values
