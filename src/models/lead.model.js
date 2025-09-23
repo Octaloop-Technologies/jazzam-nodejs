@@ -309,6 +309,15 @@ const leadSchema = new Schema(
       },
     },
 
+    totalScore: {
+      type: Number,
+      default: 0,
+    },
+
+    category: {
+      type: String
+    },
+
     // Lead Management Fields
     status: {
       type: String,
