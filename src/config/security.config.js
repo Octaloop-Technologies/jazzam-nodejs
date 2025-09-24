@@ -31,7 +31,12 @@ export const securityConfig = {
     allowedOrigins: [process.env.CLIENT_URL],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Cookie",
+    ],
     exposedHeaders: ["Set-Cookie"],
   },
 
@@ -187,6 +192,17 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     securityConfig.cookies.domain.trim() !== ""
   ) {
     options.domain = securityConfig.cookies.domain;
+  }
+
+  // Debug logging for production
+  if (process.env.NODE_ENV === "production") {
+    console.log(
+      `Cookie options for ${tokenType}:`,
+      JSON.stringify(options, null, 2)
+    );
+    console.log(
+      `Environment: NODE_ENV=${process.env.NODE_ENV}, COOKIE_DOMAIN=${process.env.COOKIE_DOMAIN}`
+    );
   }
 
   return options;

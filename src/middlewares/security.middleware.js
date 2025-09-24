@@ -8,10 +8,14 @@ export const authRateLimit = rateLimit({
   ...securityConfig.rateLimit.auth,
   // Store in memory (use Redis for production)
   store: undefined, // Default MemoryStore
+  // Trust proxy for accurate IP detection
+  trustProxy: process.env.NODE_ENV === "production",
 });
 
 export const generalRateLimit = rateLimit({
   ...securityConfig.rateLimit.general,
+  // Trust proxy for accurate IP detection
+  trustProxy: process.env.NODE_ENV === "production",
 });
 
 // ==============================================================

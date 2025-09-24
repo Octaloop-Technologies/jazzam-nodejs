@@ -24,6 +24,13 @@ import {
 const app = express();
 
 // ==========================================================
+// Trust proxy configuration for production
+// ==========================================================
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1); // Trust first proxy
+}
+
+// ==========================================================
 // Validate environment variables on startup
 // ==========================================================
 validateEnvironment();
