@@ -253,11 +253,8 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
     const user = req.user;
 
     if (!user) {
-      console.error("Google OAuth: No user found in request");
       throw new ApiError(401, "Google authentication failed");
     }
-
-    console.log("Google OAuth: User authenticated successfully:", user.email);
 
     // Generate tokens for the authenticated user
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
@@ -270,14 +267,7 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       refreshToken: getRefreshTokenCookieOptions(),
     };
 
-    console.log("Google OAuth: Cookie options:", {
-      secure: cookieOptions.accessToken.secure,
-      sameSite: cookieOptions.accessToken.sameSite,
-      domain: cookieOptions.accessToken.domain,
-    });
-
     const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
-    console.log("Google OAuth: Redirecting to:", redirectUrl);
 
     // Set cookies and redirect
     res
@@ -286,7 +276,6 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
       .redirect(redirectUrl);
   } catch (error) {
-    console.error("Google OAuth Error:", error);
     const errorMessage = error.message || "Authentication failed";
     return res.redirect(
       `${process.env.CLIENT_URL}/login?error=auth_failed&message=${encodeURIComponent(errorMessage)}`

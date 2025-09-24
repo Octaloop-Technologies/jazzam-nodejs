@@ -40,16 +40,12 @@ router.route("/auth/login").post(loginUser);
 // ================================================
 
 // GET /api/v1/users/auth/google
-router.route("/auth/google").get(
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-    prompt: "select_account", // Force account selection
-  })
-);
+router
+  .route("/auth/google")
+  .get(passport.authenticate("google", { scope: ["profile", "email"] }));
 router.route("/auth/google/callback").get(
   passport.authenticate("google", {
-    failureRedirect: `${process.env.CLIENT_URL}/login?error=auth_failed`,
-    session: false, // Disable session for stateless JWT approach
+    failureRedirect: "/login?error=auth_failed",
   }),
   googleLoginCallback
 );
