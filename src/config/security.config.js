@@ -15,7 +15,7 @@ export const securityConfig = {
   cookies: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "lax" : false,
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     domain:
       process.env.NODE_ENV === "production"
         ? process.env.COOKIE_DOMAIN
@@ -172,14 +172,25 @@ export const validateEnvironment = () => {
 // Cookie Options Helper Functions
 // ==============================================================
 
-export const getCookieOptions = (tokenType = "accessToken") => ({
-  httpOnly: securityConfig.cookies.httpOnly,
-  secure: securityConfig.cookies.secure,
-  sameSite: securityConfig.cookies.sameSite,
-  domain: securityConfig.cookies.domain,
-  maxAge: securityConfig.cookies.maxAge[tokenType],
-  path: "/", // Ensure cookies are available for all paths
-});
+export const getCookieOptions = (tokenType = "accessToken") => {
+  const options = {
+    httpOnly: securityConfig.cookies.httpOnly,
+    secure: securityConfig.cookies.secure,
+    sameSite: securityConfig.cookies.sameSite,
+    maxAge: securityConfig.cookies.maxAge[tokenType],
+    path: "/", // Ensure cookies are available for all paths
+  };
+
+  // Only set domain if it's explicitly configured and not empty
+  if (
+    securityConfig.cookies.domain &&
+    securityConfig.cookies.domain.trim() !== ""
+  ) {
+    options.domain = securityConfig.cookies.domain;
+  }
+
+  return options;
+};
 
 export const getAccessTokenCookieOptions = () =>
   getCookieOptions("accessToken");

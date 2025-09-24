@@ -253,8 +253,11 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
     const user = req.user;
 
     if (!user) {
+      console.error("Google OAuth: No user found in request");
       throw new ApiError(401, "Google authentication failed");
     }
+
+    console.log("Google OAuth: User found:", user.email);
 
     // Generate tokens for the authenticated user
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
@@ -262,13 +265,27 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
     );
 
     // Set cookies using centralized config
+    const cookieOptions = {
+      accessToken: getAccessTokenCookieOptions(),
+      refreshToken: getRefreshTokenCookieOptions(),
+    };
+
+    console.log(
+      "Google OAuth: Cookie options:",
+      JSON.stringify(cookieOptions, null, 2)
+    );
+
     return res
       .status(200)
-      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-      .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
+      .cookie("accessToken", accessToken, cookieOptions.accessToken)
+      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
       .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
   } catch (error) {
-    return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+    console.error("Google OAuth Error:", error);
+    const errorMessage = error.message || "Authentication failed";
+    return res.redirect(
+      `${process.env.CLIENT_URL}/login?error=auth_failed&message=${encodeURIComponent(errorMessage)}`
+    );
   }
 });
 
@@ -400,10 +417,20 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
     );
 
     // Set cookies using centralized config
+    const cookieOptions = {
+      accessToken: getAccessTokenCookieOptions(),
+      refreshToken: getRefreshTokenCookieOptions(),
+    };
+
+    console.log(
+      "Zoho CRM OAuth: Cookie options:",
+      JSON.stringify(cookieOptions, null, 2)
+    );
+
     return res
       .status(200)
-      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-      .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
+      .cookie("accessToken", accessToken, cookieOptions.accessToken)
+      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
       .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
   } catch (error) {
     console.error("Zoho CRM OAuth Error:", error);
