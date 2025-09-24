@@ -15,9 +15,6 @@ export const securityConfig = {
   cookies: {
     httpOnly: true,
     secure: true,
-    sameSite: "none",
-    // Don't set domain in development, let browser handle it
-    // In production, extract domain from CLIENT_URL if it's a full URL
     domain: "https://jazzam.ai",
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes in milliseconds
@@ -181,17 +178,10 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     httpOnly: securityConfig.cookies.httpOnly,
     secure: securityConfig.cookies.secure,
     sameSite: securityConfig.cookies.sameSite,
+    domain: securityConfig.cookies.domain,
     maxAge: securityConfig.cookies.maxAge[tokenType],
     path: "/", // Ensure cookies are available for all paths
   };
-
-  // Only set domain if it's explicitly configured and not empty
-  if (
-    securityConfig.cookies.domain &&
-    securityConfig.cookies.domain.trim() !== ""
-  ) {
-    options.domain = securityConfig.cookies.domain;
-  }
 
   console.log("Cookie options", options);
 
