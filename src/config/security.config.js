@@ -15,10 +15,11 @@ export const securityConfig = {
   cookies: {
     httpOnly: true,
     secure: true,
-    domain: "https://jazzam.ai",
+    sameSite: "strict",
+    domain: "jazzam.ai",
     maxAge: {
-      accessToken: 30 * 60 * 1000, // 30 minutes in milliseconds
-      refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+      accessToken: 30 * 60 * 1000, // 30 minutes
+      refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   },
 
@@ -182,8 +183,6 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     maxAge: securityConfig.cookies.maxAge[tokenType],
     path: "/", // Ensure cookies are available for all paths
   };
-
-  console.log("Cookie options", options);
 
   return options;
 };

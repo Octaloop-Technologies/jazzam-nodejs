@@ -272,20 +272,8 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
     // Set cookies and redirect
     res
       .status(200)
-      .cookie("accessToken", accessToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "strict",
-        domain: "jazzam.ai",
-        maxAge: 30 * 60 * 1000, // 30 minutes
-      })
-      .cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "strict",
-        domain: "jazzam.ai",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      })
+      .cookie("accessToken", accessToken, cookieOptions.accessToken)
+      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
       .redirect(redirectUrl);
   } catch (error) {
     const errorMessage = error.message || "Authentication failed";
