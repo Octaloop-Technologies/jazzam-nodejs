@@ -272,8 +272,26 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
     // Set cookies and redirect
     res
       .status(200)
-      .cookie("accessToken", accessToken, cookieOptions.accessToken)
-      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
+      .cookie("accessToken", accessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        domain: "https://jazzam.ai",
+        maxAge: {
+          accessToken: 30 * 60 * 1000,
+          refreshToken: 7 * 24 * 60 * 60 * 1000,
+        },
+      })
+      .cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        domain: "https://jazzam.ai",
+        maxAge: {
+          accessToken: 30 * 60 * 1000,
+          refreshToken: 7 * 24 * 60 * 60 * 1000,
+        },
+      })
       .redirect(redirectUrl);
   } catch (error) {
     const errorMessage = error.message || "Authentication failed";
