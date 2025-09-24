@@ -193,6 +193,8 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     options.domain = securityConfig.cookies.domain;
   }
 
+  console.log("Cookie options", options);
+
   return options;
 };
 
