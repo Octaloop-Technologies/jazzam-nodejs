@@ -240,40 +240,32 @@ const leadSchema = new Schema(
 
     // BANT (Budget, Authority, Need, Timeline) Lead Qualification Fields
     bant: {
-      authority: {
-        isDecisionMaker: {
-          type: Boolean,
-          default: false,
-        },
-        score: {
-          type: Number,
-        },
-        value: {
-          type: String,
-        },
-      },
       budget: {
         value: {
           type: String,
+          default: "Not available",
         },
-        score: {
-          type: Number,
+      },
+      authority: {
+        value: {
+          type: String,
+          default: "Not available",
+        },
+        isDecisionMaker: {
+          type: Boolean,
+          default: false,
         },
       },
       need: {
         value: {
           type: String,
-        },
-        score: {
-          type: Number,
+          default: "Not available",
         },
       },
       timeline: {
         value: {
           type: String,
-        },
-        score: {
-          type: Number,
+          default: "Not available",
         },
       },
     },

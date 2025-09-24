@@ -346,8 +346,6 @@ const updateLeadById = asyncHandler(async (req, res) => {
     lead_id
   );
 
-  return;
-
   if (!lead_id) {
     throw new ApiError(400, "id is required to update lead");
   }
@@ -355,15 +353,13 @@ const updateLeadById = asyncHandler(async (req, res) => {
   try {
     // Map request body to lead schema fields
     const updateFields = {
-      "bant.budget.value": BANT?.Budget?.Value,
-      "bant.budget.score": BANT?.Budget?.Score,
-      "bant.authority.value": BANT?.Authority?.Value,
-      "bant.authority.isDecisionMaker": BANT?.Authority?.IsDecisionMaker,
-      "bant.authority.score": BANT?.Authority?.Score,
-      "bant.need.value": BANT?.Need?.Value,
-      "bant.need.score": BANT?.Need?.Score,
-      "bant.timeline.value": BANT?.Timeline?.Value,
-      "bant.timeline.score": BANT?.Timeline?.Score,
+      "bant.budget.value": BANT?.Budget,
+      "bant.authority.value": BANT?.Authority,
+      "bant.authority.isDecisionMaker": BANT?.Authority?.toLowerCase().includes(
+        "decision maker: yes"
+      ),
+      "bant.need.value": BANT?.Need,
+      "bant.timeline.value": BANT?.Timeline,
       leadScore: Score,
       category: Category,
     };
