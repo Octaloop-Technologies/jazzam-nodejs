@@ -335,17 +335,6 @@ const getLeadById = asyncHandler(async (req, res) => {
 const updateLeadById = asyncHandler(async (req, res) => {
   const { lead_id, BANT, Score, Category } = req.body;
 
-  console.log(
-    "BANT",
-    BANT,
-    "Score",
-    Score,
-    "Category",
-    Category,
-    "lead_id",
-    lead_id
-  );
-
   if (!lead_id) {
     throw new ApiError(400, "id is required to update lead");
   }
@@ -361,7 +350,7 @@ const updateLeadById = asyncHandler(async (req, res) => {
       "bant.need.value": BANT?.Need,
       "bant.timeline.value": BANT?.Timeline,
       leadScore: Score,
-      category: Category,
+      status: Category.toLowerCase(),
     };
 
     // Remove undefined fields so they don’t overwrite existing values

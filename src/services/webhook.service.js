@@ -126,7 +126,7 @@ class WebhookService {
     return {
       lead_id: lead._id.toString(),
       firstName: lead.firstName || null,
-      fullName: lead.fullName || null,
+      fullName: lead.fullName || "null",
       lastName: lead.lastName || null,
       email: lead.email || null,
       phone: lead.phone || null,
@@ -134,7 +134,7 @@ class WebhookService {
       mobile: lead.phone || null,
       city: lead.addressWithoutCountry || null,
       country: lead.addressCountryOnly || lead.addressWithCountry || null,
-      company: lead.company || null,
+      company: lead.company || "null",
       title: lead.jobTitle || null,
       skills: lead.skills ? lead.skills.map((skill) => skill.title) : [],
       experience:

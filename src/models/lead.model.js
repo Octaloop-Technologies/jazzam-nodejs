@@ -270,10 +270,6 @@ const leadSchema = new Schema(
       },
     },
 
-    category: {
-      type: String,
-    },
-
     // Lead Management Fields
     status: {
       type: String,
