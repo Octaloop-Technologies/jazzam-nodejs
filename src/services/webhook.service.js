@@ -75,95 +75,78 @@ class WebhookService {
   }
 
   /**
+   * Calculate total experience in years from experiences array
+   * @param {Array} experiences - Array of experience objects
+   * @returns {string} - Total experience in years (e.g., "1.5", "2", "0.5")
+   */
+  calculateTotalExperience(experiences) {
+    if (
+      !experiences ||
+      !Array.isArray(experiences) ||
+      experiences.length === 0
+    ) {
+      return "0";
+    }
+
+    let totalMonths = 0;
+
+    experiences.forEach((exp) => {
+      if (!exp.caption) return;
+
+      // Parse duration from caption (e.g., "Jun 2024 - Sep 2024 · 4 mos", "Jun 2025 - Present · 4 mos")
+      const durationMatch = exp.caption.match(
+        /(\d+)\s*(mos|yr|yrs|year|years)/i
+      );
+
+      if (durationMatch) {
+        const duration = parseInt(durationMatch[1]);
+        const unit = durationMatch[2].toLowerCase();
+
+        if (unit.includes("yr") || unit.includes("year")) {
+          totalMonths += duration * 12;
+        } else if (unit.includes("mos")) {
+          totalMonths += duration;
+        }
+      }
+    });
+
+    // Convert months to years
+    const totalYears = totalMonths / 12;
+
+    // Round to 1 decimal place for precision
+    return totalYears.toFixed(1);
+  }
+
+  /**
    * Prepare lead data for webhook payload
    * @param {Object} lead - Lead document from MongoDB
    * @returns {Object} - Formatted payload for Make.com
    */
   prepareLeadPayload(lead) {
     return {
-      // Basic lead information
       lead_id: lead._id.toString(),
-      linkedin_profile_url: lead.linkedinProfileUrl,
-      first_name: lead.firstName,
-      last_name: lead.lastName,
-      full_name: lead.fullName,
-      headline: lead.headline,
-      email: lead.email,
-      phone: lead.phone,
-
-      // LinkedIn metrics
-      followers: lead.followers,
-      connections: lead.connections,
-      public_identifier: lead.publicIdentifier,
-
-      // Company information
-      company: lead.company,
-      company_industry: lead.companyIndustry,
-      company_website: lead.companyWebsite,
-      company_linkedin: lead.companyLinkedin,
-      company_founded_in: lead.companyFoundedIn,
-      company_size: lead.companySize,
-
-      // Job information
-      job_title: lead.jobTitle,
-      current_job_duration: lead.currentJobDuration,
-      current_job_duration_years: lead.currentJobDurationInYrs,
-
-      // Location information
-      location: lead.location,
-      address_country_only: lead.addressCountryOnly,
-      address_with_country: lead.addressWithCountry,
-      address_without_country: lead.addressWithoutCountry,
-
-      // Profile media
-      profile_pic: lead.profilePic,
-      profile_pic_high_quality: lead.profilePicHighQuality,
-
-      // Profile content
-      about: lead.about,
-      creator_website: lead.creatorWebsite,
-
-      // Professional data
-      experiences: lead.experiences || [],
-      educations: lead.educations || [],
-      skills: lead.skills || [],
-      languages: lead.languages || [],
-      interests: lead.interests || [],
-
-      // // BANT qualification data
-      // bant: {
-      //   budget: lead.bant?.budget,
-      //   budget_status: lead.bant?.budgetStatus,
-      //   authority: {
-      //     is_decision_maker: lead.bant?.authority?.isDecisionMaker,
-      //     authority_status: lead.bant?.authority?.authorityStatus,
-      //   },
-      //   need: {
-      //     needs_list: lead.bant?.need?.needsList || [],
-      //     need_status: lead.bant?.need?.needStatus,
-      //   },
-      //   timeline: {
-      //     expected_timeframe: lead.bant?.timeline?.expectedTimeframe,
-      //     timeline_status: lead.bant?.timeline?.timelineStatus,
-      //   },
-      // },
-
-      // Lead management
-      status: lead.status,
-      notes: lead.notes,
-      assigned_to: lead.assignedTo,
-      tags: lead.tags || [],
-      // lead_score: lead.leadScore,
-
-      // Timestamps
-      created_at: lead.createdAt,
-      updated_at: lead.updatedAt,
-      last_contact_date: lead.lastContactDate,
-      next_follow_up_date: lead.nextFollowUpDate,
-
-      // Metadata
-      webhook_timestamp: new Date().toISOString(),
-      webhook_source: "lead-management-system",
+      firstName: lead.firstName || null,
+      fullName: lead.fullName || null,
+      lastName: lead.lastName || null,
+      email: lead.email || null,
+      phone: lead.phone || null,
+      fax: null,
+      mobile: lead.phone || null,
+      city: lead.addressWithoutCountry || null,
+      country: lead.addressCountryOnly || lead.addressWithCountry || null,
+      company: lead.company || null,
+      title: lead.jobTitle || null,
+      skills: lead.skills ? lead.skills.map((skill) => skill.title) : [],
+      experience:
+        this.calculateTotalExperience(lead.experiences) ||
+        lead.currentJobDurationInYrs ||
+        null,
+      duration: lead.currentJobDuration || null,
+      interests: lead.interests
+        ? lead.interests.map((interest) => interest.section_name)
+        : [],
+      company_size: lead.companySize || null,
+      industry: lead.companyIndustry || null,
     };
   }
 

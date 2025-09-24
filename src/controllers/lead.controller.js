@@ -331,11 +331,25 @@ const getLeadById = asyncHandler(async (req, res) => {
   }
 });
 
+// Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
-  const { fullName, BANT, Score, Category } = req.body;
+  const { lead_id, BANT, Score, Category } = req.body;
 
-  if (!fullName) {
-    throw new ApiError(400, "fullName is required to update lead");
+  console.log(
+    "BANT",
+    BANT,
+    "Score",
+    Score,
+    "Category",
+    Category,
+    "lead_id",
+    lead_id
+  );
+
+  return;
+
+  if (!lead_id) {
+    throw new ApiError(400, "id is required to update lead");
   }
 
   try {
@@ -350,8 +364,8 @@ const updateLeadById = asyncHandler(async (req, res) => {
       "bant.need.score": BANT?.Need?.Score,
       "bant.timeline.value": BANT?.Timeline?.Value,
       "bant.timeline.score": BANT?.Timeline?.Score,
-      "leadScore": Score,
-      "category": Category,
+      leadScore: Score,
+      category: Category,
     };
 
     // Remove undefined fields so they don’t overwrite existing values
@@ -360,13 +374,13 @@ const updateLeadById = asyncHandler(async (req, res) => {
     );
 
     const updatedLead = await Lead.findOneAndUpdate(
-      { fullName },
+      { _id: lead_id },
       { $set: updateFields },
       { new: true }
     );
 
     if (!updatedLead) {
-      throw new ApiError(404, `Lead with fullName "${fullName}" not found`);
+      throw new ApiError(404, `Lead with id "${lead_id}" not found`);
     }
 
     return res
