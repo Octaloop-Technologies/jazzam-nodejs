@@ -36,8 +36,9 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      passReqToCallback: true, // Pass request object to callback
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
         // Check if user already exists with this Google ID
         let user = await User.findOne({ googleId: profile.id });

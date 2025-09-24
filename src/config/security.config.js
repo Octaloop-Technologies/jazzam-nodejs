@@ -14,9 +14,9 @@ export const securityConfig = {
   // Cookie Configuration
   cookies: {
     httpOnly: true,
-    secure: true,
-    sameSite: "strict",
-    domain: "jazzam.ai",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    domain: process.env.NODE_ENV === "production" ? "jazzam.ai" : undefined,
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
       refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -85,7 +85,7 @@ export const securityConfig = {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
     },
   },
