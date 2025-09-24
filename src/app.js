@@ -102,6 +102,33 @@ app.get("/health", (req, res) => {
 });
 
 // ==========================================================
+// Cookie test endpoint (development only)
+// ==========================================================
+if (process.env.NODE_ENV !== "production") {
+  app.get("/test-cookies", (req, res) => {
+    const testCookieOptions = {
+      httpOnly: true,
+      secure: false, // false for development
+      sameSite: "lax",
+      maxAge: 5 * 60 * 1000, // 5 minutes
+      path: "/",
+    };
+
+    res
+      .status(200)
+      .cookie("testCookie", "test-value-" + Date.now(), testCookieOptions)
+      .json({
+        success: true,
+        message: "Test cookie set",
+        cookieOptions: testCookieOptions,
+        origin: req.headers.origin,
+        userAgent: req.headers["user-agent"],
+        cookies: req.cookies,
+      });
+  });
+}
+
+// ==========================================================
 // API documentation endpoint (development only)
 // ==========================================================
 if (process.env.NODE_ENV !== "production") {

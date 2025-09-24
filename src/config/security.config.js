@@ -16,12 +16,21 @@ export const securityConfig = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    // Don't set domain in development, let browser handle it
+    // In production, extract domain from CLIENT_URL if it's a full URL
     domain:
-      process.env.NODE_ENV === "production"
-        ? process.env.CLIENT_URL
+      process.env.NODE_ENV === "production" && process.env.CLIENT_URL
+        ? (() => {
+            try {
+              const url = new URL(process.env.CLIENT_URL);
+              return url.hostname;
+            } catch {
+              return undefined;
+            }
+          })()
         : undefined,
     maxAge: {
-      accessToken: 15 * 60 * 1000, // 15 minutes in milliseconds
+      accessToken: 30 * 60 * 1000, // 30 minutes in milliseconds
       refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
     },
   },
@@ -192,6 +201,15 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     securityConfig.cookies.domain.trim() !== ""
   ) {
     options.domain = securityConfig.cookies.domain;
+  }
+
+  // Debug logging in development
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`Cookie options for ${tokenType}:`, {
+      ...options,
+      // Don't log the actual token value
+      value: "[REDACTED]",
+    });
   }
 
   return options;
