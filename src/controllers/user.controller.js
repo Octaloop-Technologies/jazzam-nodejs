@@ -275,11 +275,15 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       JSON.stringify(cookieOptions, null, 2)
     );
 
-    return res
+    // Create a redirect URL with tokens as query parameters as fallback
+    const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
+
+    // Set cookies and redirect
+    res
       .status(200)
       .cookie("accessToken", accessToken, cookieOptions.accessToken)
       .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
-      .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
+      .redirect(redirectUrl);
   } catch (error) {
     console.error("Google OAuth Error:", error);
     const errorMessage = error.message || "Authentication failed";
@@ -427,11 +431,15 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
       JSON.stringify(cookieOptions, null, 2)
     );
 
-    return res
+    // Create a redirect URL with tokens as query parameters as fallback
+    const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
+
+    // Set cookies and redirect
+    res
       .status(200)
       .cookie("accessToken", accessToken, cookieOptions.accessToken)
       .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
-      .redirect(`${process.env.CLIENT_URL}/super-user?login=success`);
+      .redirect(redirectUrl);
   } catch (error) {
     console.error("Zoho CRM OAuth Error:", error);
     return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);

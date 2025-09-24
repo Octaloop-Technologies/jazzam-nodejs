@@ -203,6 +203,7 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     console.log(
       `Environment: NODE_ENV=${process.env.NODE_ENV}, COOKIE_DOMAIN=${process.env.COOKIE_DOMAIN}`
     );
+    console.log(`CLIENT_URL=${process.env.CLIENT_URL}`);
   }
 
   return options;
