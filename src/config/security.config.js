@@ -18,7 +18,7 @@ export const securityConfig = {
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     domain:
       process.env.NODE_ENV === "production"
-        ? process.env.COOKIE_DOMAIN
+        ? process.env.CLIENT_URL
         : undefined,
     maxAge: {
       accessToken: 15 * 60 * 1000, // 15 minutes in milliseconds
