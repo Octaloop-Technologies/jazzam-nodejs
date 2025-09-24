@@ -277,20 +277,14 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
         secure: true,
         sameSite: "strict",
         domain: "https://jazzam.ai",
-        maxAge: {
-          accessToken: 30 * 60 * 1000,
-          refreshToken: 7 * 24 * 60 * 60 * 1000,
-        },
+        maxAge: 30 * 60 * 1000, // 30 minutes
       })
       .cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: "strict",
         domain: "https://jazzam.ai",
-        maxAge: {
-          accessToken: 30 * 60 * 1000,
-          refreshToken: 7 * 24 * 60 * 60 * 1000,
-        },
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       })
       .redirect(redirectUrl);
   } catch (error) {
