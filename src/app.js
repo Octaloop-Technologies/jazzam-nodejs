@@ -11,7 +11,6 @@ import {
   securityHeaders,
   sanitizeInput,
 } from "./middlewares/security.middleware.js";
-import { autoRefreshToken } from "./middlewares/tokenRefresh.middleware.js";
 import {
   validateEnvironment,
   securityConfig,
@@ -22,13 +21,6 @@ import {
 } from "./middlewares/error.middleware.js";
 
 const app = express();
-
-// ==========================================================
-// Trust proxy configuration for production
-// ==========================================================
-if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1); // Trust first proxy
-}
 
 // ==========================================================
 // Validate environment variables on startup
@@ -52,7 +44,6 @@ app.use(
 app.use(express.static("public"));
 app.use(cookieParser());
 app.use(sanitizeInput); // Input sanitization
-app.use(autoRefreshToken); // Auto token refresh
 
 // ==========================================================
 // Session configuration for passport

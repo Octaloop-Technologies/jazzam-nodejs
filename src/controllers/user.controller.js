@@ -253,11 +253,8 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
     const user = req.user;
 
     if (!user) {
-      console.error("Google OAuth: No user found in request");
       throw new ApiError(401, "Google authentication failed");
     }
-
-    console.log("Google OAuth: User found:", user.email);
 
     // Generate tokens for the authenticated user
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
@@ -270,12 +267,6 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       refreshToken: getRefreshTokenCookieOptions(),
     };
 
-    console.log(
-      "Google OAuth: Cookie options:",
-      JSON.stringify(cookieOptions, null, 2)
-    );
-
-    // Create a redirect URL with tokens as query parameters as fallback
     const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
 
     // Set cookies and redirect
@@ -285,7 +276,6 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
       .redirect(redirectUrl);
   } catch (error) {
-    console.error("Google OAuth Error:", error);
     const errorMessage = error.message || "Authentication failed";
     return res.redirect(
       `${process.env.CLIENT_URL}/login?error=auth_failed&message=${encodeURIComponent(errorMessage)}`
@@ -324,7 +314,6 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
     const tokenData = await tokenResponse.json();
 
     if (!tokenResponse.ok) {
-      console.error("Zoho Token Error:", tokenData);
       throw new ApiError(
         400,
         `Failed to get access token from Zoho: ${tokenData.error_description || tokenData.error || tokenResponse.statusText}`
@@ -332,7 +321,6 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
     }
 
     if (!tokenData.access_token) {
-      console.error("No access token in response:", tokenData);
       throw new ApiError(
         400,
         "Failed to get access token from Zoho CRM - No token in response"
@@ -352,10 +340,8 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
     );
 
     const userData = await userResponse.json();
-    // console.log("Zoho CRM API Response:", JSON.stringify(userData, null, 2));
 
     if (!userResponse.ok) {
-      console.error("Zoho CRM API Error:", userData);
       throw new ApiError(
         400,
         `Zoho CRM API Error: ${userData.message || userResponse.statusText}`
@@ -367,7 +353,6 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
       !Array.isArray(userData.users) ||
       userData.users.length === 0
     ) {
-      console.error("Invalid user data structure:", userData);
       throw new ApiError(
         400,
         "Failed to get user data from Zoho CRM - Invalid response structure"
@@ -378,7 +363,6 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
 
     // Validate required user data
     if (!zohoCrmUser.id || !zohoCrmUser.email) {
-      console.error("Missing required Zoho user data:", zohoCrmUser);
       throw new ApiError(
         400,
         "Invalid user data from Zoho - Missing required fields (id or email)"
@@ -426,12 +410,6 @@ const zohoCrmLoginUser = asyncHandler(async (req, res) => {
       refreshToken: getRefreshTokenCookieOptions(),
     };
 
-    console.log(
-      "Zoho CRM OAuth: Cookie options:",
-      JSON.stringify(cookieOptions, null, 2)
-    );
-
-    // Create a redirect URL with tokens as query parameters as fallback
     const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
 
     // Set cookies and redirect
