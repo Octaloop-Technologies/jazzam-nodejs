@@ -267,14 +267,32 @@ const googleLoginCallback = asyncHandler(async (req, res) => {
       refreshToken: getRefreshTokenCookieOptions(),
     };
 
-    const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
+    const redirectUrl = `${process.env.CLIENT_URL}/super-user`;
 
-    // Set cookies and redirect
+    // Set cookies and use HTML redirect to ensure cookies are processed
     res
       .status(200)
       .cookie("accessToken", accessToken, cookieOptions.accessToken)
-      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
-      .redirect(redirectUrl);
+      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title style="text-align: center; font-size: 18px; font-weight: 600;">Redirecting...</title>
+            <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+          </head>
+          <body>
+            <div style="display: flex; justify-content: center; align-items: center; height: 100dvh;">
+              <p style="text-align: center; font-size: 18px; font-weight: 600;">Redirecting to dashboard...</p>
+            </div>
+            <script>
+              // Fallback redirect
+              setTimeout(() => {
+                window.location.href = "${redirectUrl}";
+              }, 100);
+            </script>
+          </body>
+        </html>
+      `);
   } catch (error) {
     const errorMessage = error.message || "Authentication failed";
     return res.redirect(
