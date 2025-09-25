@@ -99,7 +99,13 @@ export const securityConfig = {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,
+      secure: process.env.NODE_ENV === "production", // HTTPS only in production
+      httpOnly: true, // Always secure for session cookies
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      domain:
+        process.env.NODE_ENV === "production"
+          ? process.env.COOKIE_DOMAIN || undefined
+          : "localhost",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
     },
   },
@@ -189,16 +195,18 @@ export const validateEnvironment = () => {
 // ==============================================================
 
 export const getCookieOptions = (tokenType = "accessToken") => {
+  const isProduction = process.env.NODE_ENV === "production";
+
   const options = {
-    httpOnly: securityConfig.cookies.httpOnly,
-    secure: securityConfig.cookies.secure,
-    sameSite: securityConfig.cookies.sameSite,
-    domain: securityConfig.cookies.domain,
+    httpOnly: isProduction ? true : false,
+    secure: isProduction,
+    sameSite: isProduction ? "strict" : "lax",
+    domain: isProduction ? process.env.COOKIE_DOMAIN || undefined : "localhost",
     maxAge: securityConfig.cookies.maxAge[tokenType],
-    path: "/", // Ensure cookies are available for all paths
+    path: "/",
   };
 
-  console.log(options);
+  console.log(`Cookie options for ${tokenType}:`, options);
 
   return options;
 };

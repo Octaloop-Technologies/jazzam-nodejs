@@ -227,10 +227,12 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
+  const cookieOptions = createAuthCookieOptions();
+
   return res
     .status(200)
-    .clearCookie("accessToken", getAccessTokenCookieOptions())
-    .clearCookie("refreshToken", getRefreshTokenCookieOptions())
+    .clearCookie("accessToken", cookieOptions.accessToken)
+    .clearCookie("refreshToken", cookieOptions.refreshToken)
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 
