@@ -9,10 +9,66 @@ import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
 } from "../config/security.config.js";
+import {
+  sendHtmlRedirect,
+  generateSuccessRedirectUrl,
+} from "../utils/redirectUtils.js";
+
+// ==============================================================
+// Helper Functions for OAuth Authentication
+// ==============================================================
+
+const createAuthCookieOptions = () => ({
+  accessToken: getAccessTokenCookieOptions(),
+  refreshToken: getRefreshTokenCookieOptions(),
+});
+
+const handleSuccessfulOAuth = async (
+  res,
+  user,
+  provider,
+  additionalParams = {}
+) => {
+  try {
+    // Generate authentication tokens
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
+
+    // Create cookie options
+    const cookieOptions = createAuthCookieOptions();
+
+    // Generate redirect URL with provider info
+    const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
+      path: "/super-user",
+      params: {
+        login: "success",
+        provider: provider,
+        ...additionalParams,
+      },
+    });
+
+    // Send HTML redirect with cookies
+    sendHtmlRedirect(
+      res,
+      redirectUrl,
+      { accessToken, refreshToken },
+      cookieOptions,
+      {
+        title: `Welcome${user.fullName ? `, ${user.fullName}` : ""}!`,
+        message: `Successfully authenticated with ${provider}. Redirecting to dashboard...`,
+      }
+    );
+  } catch (error) {
+    console.error(`OAuth success handler error for ${provider}:`, error);
+    throw new ApiError(500, `Failed to complete ${provider} authentication`);
+  }
+};
 
 // ==============================================================
 // User Authentication Functions
 // ==============================================================
+
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -248,198 +304,135 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 // ==============================================================
 // OAuth Login Functions
 // ==============================================================
+
 const googleLoginCallback = asyncHandler(async (req, res) => {
-  try {
-    const user = req.user;
+  const user = req.user;
 
-    if (!user) {
-      throw new ApiError(401, "Google authentication failed");
-    }
-
-    // Generate tokens for the authenticated user
-    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-      user._id
-    );
-
-    // Set cookies using centralized config
-    const cookieOptions = {
-      accessToken: getAccessTokenCookieOptions(),
-      refreshToken: getRefreshTokenCookieOptions(),
-    };
-
-    const redirectUrl = `${process.env.CLIENT_URL}/super-user`;
-
-    // Set cookies and use HTML redirect to ensure cookies are processed
-    res
-      .status(200)
-      .cookie("accessToken", accessToken, cookieOptions.accessToken)
-      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken).send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title style="text-align: center; font-size: 18px; font-weight: 600;">Redirecting...</title>
-            <meta http-equiv="refresh" content="0;url=${redirectUrl}">
-          </head>
-          <body>
-            <div style="display: flex; justify-content: center; align-items: center; height: 100dvh;">
-              <p style="text-align: center; font-size: 18px; font-weight: 600;">Redirecting to dashboard...</p>
-            </div>
-            <script>
-              // Fallback redirect
-              setTimeout(() => {
-                window.location.href = "${redirectUrl}";
-              }, 100);
-            </script>
-          </body>
-        </html>
-      `);
-  } catch (error) {
-    const errorMessage = error.message || "Authentication failed";
-    return res.redirect(
-      `${process.env.CLIENT_URL}/login?error=auth_failed&message=${encodeURIComponent(errorMessage)}`
-    );
+  if (!user) {
+    throw new ApiError(401, "Google authentication failed");
   }
+
+  // Handle successful Google authentication
+  await handleSuccessfulOAuth(res, user, "Google");
 });
 
 const zohoCrmLoginUser = asyncHandler(async (req, res) => {
-  try {
-    const { code } = req.query;
+  const { code } = req.query;
 
-    if (!code) {
-      // Redirect to Zoho CRM OAuth
-      const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
-      return res.redirect(authUrl);
-    }
-
-    // Exchange code for access token
-    const tokenResponse = await fetch(
-      "https://accounts.zoho.com/oauth/v2/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          client_id: process.env.ZOHO_CLIENT_ID,
-          client_secret: process.env.ZOHO_CLIENT_SECRET,
-          redirect_uri: process.env.ZOHO_REDIRECT_URI,
-          code: code,
-        }),
-      }
-    );
-
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenResponse.ok) {
-      throw new ApiError(
-        400,
-        `Failed to get access token from Zoho: ${tokenData.error_description || tokenData.error || tokenResponse.statusText}`
-      );
-    }
-
-    if (!tokenData.access_token) {
-      throw new ApiError(
-        400,
-        "Failed to get access token from Zoho CRM - No token in response"
-      );
-    }
-
-    // Get user info from Zoho CRM using the api_domain from token response
-    const apiDomain = tokenData.api_domain || "https://www.zohoapis.com";
-
-    const userResponse = await fetch(
-      `${apiDomain}/crm/v2/users?type=CurrentUser`,
-      {
-        headers: {
-          Authorization: `Zoho-oauthtoken ${tokenData.access_token}`,
-        },
-      }
-    );
-
-    const userData = await userResponse.json();
-
-    if (!userResponse.ok) {
-      throw new ApiError(
-        400,
-        `Zoho CRM API Error: ${userData.message || userResponse.statusText}`
-      );
-    }
-
-    if (
-      !userData.users ||
-      !Array.isArray(userData.users) ||
-      userData.users.length === 0
-    ) {
-      throw new ApiError(
-        400,
-        "Failed to get user data from Zoho CRM - Invalid response structure"
-      );
-    }
-
-    const zohoCrmUser = userData.users[0];
-
-    // Validate required user data
-    if (!zohoCrmUser.id || !zohoCrmUser.email) {
-      throw new ApiError(
-        400,
-        "Invalid user data from Zoho - Missing required fields (id or email)"
-      );
-    }
-
-    // Check if user already exists
-    let user = await User.findOne({ zohoCrmId: zohoCrmUser.id });
-
-    if (!user) {
-      // Check if user exists with same email
-      user = await User.findOne({ email: zohoCrmUser.email });
-
-      if (user) {
-        // Link Zoho CRM account to existing user
-        user.zohoCrmId = zohoCrmUser.id;
-        user.provider = "zohocrm";
-        await user.save();
-      } else {
-        // Create new user
-        user = await User.create({
-          name: zohoCrmUser.email.split("@")[0].toLowerCase(),
-          email: zohoCrmUser.email,
-          fullName: zohoCrmUser.full_name || zohoCrmUser.name,
-          zohoCrmId: zohoCrmUser.id,
-          provider: "zohocrm",
-          password: "zohocrm_oauth_user", // placeholder password
-          isVerified: true,
-          avatar: {
-            url: "https://via.placeholder.com/150",
-            public_id: `zohocrm_${zohoCrmUser.id}`,
-          },
-        });
-      }
-    }
-
-    // Generate tokens
-    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-      user._id
-    );
-
-    // Set cookies using centralized config
-    const cookieOptions = {
-      accessToken: getAccessTokenCookieOptions(),
-      refreshToken: getRefreshTokenCookieOptions(),
-    };
-
-    const redirectUrl = `${process.env.CLIENT_URL}/super-user?login=success`;
-
-    // Set cookies and redirect
-    res
-      .status(200)
-      .cookie("accessToken", accessToken, cookieOptions.accessToken)
-      .cookie("refreshToken", refreshToken, cookieOptions.refreshToken)
-      .redirect(redirectUrl);
-  } catch (error) {
-    console.error("Zoho CRM OAuth Error:", error);
-    return res.redirect(`${process.env.CLIENT_URL}/login?error=auth_failed`);
+  if (!code) {
+    // Redirect to Zoho CRM OAuth
+    const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
+    return res.redirect(authUrl);
   }
+
+  // Exchange code for access token
+  const tokenResponse = await fetch(
+    "https://accounts.zoho.com/oauth/v2/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: process.env.ZOHO_CLIENT_ID,
+        client_secret: process.env.ZOHO_CLIENT_SECRET,
+        redirect_uri: process.env.ZOHO_REDIRECT_URI,
+        code: code,
+      }),
+    }
+  );
+
+  const tokenData = await tokenResponse.json();
+
+  if (!tokenResponse.ok) {
+    throw new ApiError(
+      400,
+      `Failed to get access token from Zoho: ${tokenData.error_description || tokenData.error || tokenResponse.statusText}`
+    );
+  }
+
+  if (!tokenData.access_token) {
+    throw new ApiError(
+      400,
+      "Failed to get access token from Zoho CRM - No token in response"
+    );
+  }
+
+  // Get user info from Zoho CRM using the api_domain from token response
+  const apiDomain = tokenData.api_domain || "https://www.zohoapis.com";
+
+  const userResponse = await fetch(
+    `${apiDomain}/crm/v2/users?type=CurrentUser`,
+    {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${tokenData.access_token}`,
+      },
+    }
+  );
+
+  const userData = await userResponse.json();
+
+  if (!userResponse.ok) {
+    throw new ApiError(
+      400,
+      `Zoho CRM API Error: ${userData.message || userResponse.statusText}`
+    );
+  }
+
+  if (
+    !userData.users ||
+    !Array.isArray(userData.users) ||
+    userData.users.length === 0
+  ) {
+    throw new ApiError(
+      400,
+      "Failed to get user data from Zoho CRM - Invalid response structure"
+    );
+  }
+
+  const zohoCrmUser = userData.users[0];
+
+  // Validate required user data
+  if (!zohoCrmUser.id || !zohoCrmUser.email) {
+    throw new ApiError(
+      400,
+      "Invalid user data from Zoho - Missing required fields (id or email)"
+    );
+  }
+
+  // Check if user already exists
+  let user = await User.findOne({ zohoCrmId: zohoCrmUser.id });
+
+  if (!user) {
+    // Check if user exists with same email
+    user = await User.findOne({ email: zohoCrmUser.email });
+
+    if (user) {
+      // Link Zoho CRM account to existing user
+      user.zohoCrmId = zohoCrmUser.id;
+      user.provider = "zohocrm";
+      await user.save();
+    } else {
+      // Create new user
+      user = await User.create({
+        name: zohoCrmUser.email.split("@")[0].toLowerCase(),
+        email: zohoCrmUser.email,
+        fullName: zohoCrmUser.full_name || zohoCrmUser.name,
+        zohoCrmId: zohoCrmUser.id,
+        provider: "zohocrm",
+        password: "zohocrm_oauth_user", // placeholder password
+        isVerified: true,
+        avatar: {
+          url: "https://via.placeholder.com/150",
+          public_id: `zohocrm_${zohoCrmUser.id}`,
+        },
+      });
+    }
+  }
+
+  // Handle successful Zoho CRM authentication
+  await handleSuccessfulOAuth(res, user, "Zoho CRM");
 });
 
 // ==============================================================
