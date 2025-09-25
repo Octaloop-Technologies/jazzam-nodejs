@@ -13,15 +13,29 @@ export const securityConfig = {
 
   // Cookie Configuration
   cookies: {
-    httpOnly: true,
-    secure: true,
-    sameSite: "strict",
-    domain: "jazzam.ai",
+    httpOnly: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    domain:
+      process.env.NODE_ENV === "production"
+        ? process.env.COOKIE_DOMAIN
+        : "localhost",
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
       refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   },
+
+  // cookies: {
+  //   httpOnly: true,
+  //   secure: true,
+  //   sameSite: "strict",
+  //   domain: "jazzam.ai",
+  //   maxAge: {
+  //     accessToken: 30 * 60 * 1000, // 30 minutes
+  //     refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
+  //   },
+  // },
 
   // CORS Configuration
   cors: {
@@ -183,6 +197,8 @@ export const getCookieOptions = (tokenType = "accessToken") => {
     maxAge: securityConfig.cookies.maxAge[tokenType],
     path: "/", // Ensure cookies are available for all paths
   };
+
+  console.log(options);
 
   return options;
 };
