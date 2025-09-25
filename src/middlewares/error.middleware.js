@@ -1,5 +1,18 @@
 import { ApiError } from "../utils/ApiError.js";
 
+// Helper function to check if error is auth-related
+const isAuthRelatedError = (message) => {
+  const authMessages = [
+    "Access token expired",
+    "Unauthorized request",
+    "Invalid token format",
+    "Invalid Access Token",
+    "Invalid Access Token - User not found",
+    "Account not verified",
+  ];
+  return authMessages.some((authMsg) => message.includes(authMsg));
+};
+
 // Global error handling middleware
 const errorHandler = (err, req, res, next) => {
   let error = err;
@@ -11,15 +24,25 @@ const errorHandler = (err, req, res, next) => {
     error = new ApiError(statusCode, message, error?.errors || [], err.stack);
   }
 
-  // Log errors in development
+  // Log errors in development (but not auth-related ones)
   if (process.env.NODE_ENV !== "production") {
-    console.error("❌ Error:", {
-      statusCode: error.statusCode,
-      message: error.message,
-      stack: error.stack,
-      url: req.originalUrl,
-      method: req.method,
-    });
+    if (isAuthRelatedError(error.message)) {
+      // Log auth-related issues as info, not errors
+      console.log("🔐 Auth:", {
+        statusCode: error.statusCode,
+        message: error.message,
+        url: req.originalUrl,
+        method: req.method,
+      });
+    } else {
+      console.error("❌ Error:", {
+        statusCode: error.statusCode,
+        message: error.message,
+        stack: error.stack,
+        url: req.originalUrl,
+        method: req.method,
+      });
+    }
   }
 
   // Prepare error response

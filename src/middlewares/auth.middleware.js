@@ -41,20 +41,23 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     req.user = user;
     next();
   } catch (error) {
-    // Only log unexpected errors in production
-    if (
-      process.env.NODE_ENV !== "production" ||
-      (error.message !== "Unauthorized request" &&
-        error.message !== "Access token expired")
-    ) {
-      console.error("JWT Verification Error:", error.message);
-    }
-
-    // Handle specific JWT errors
+    // Handle specific JWT errors without logging them as errors
     if (error.name === "JsonWebTokenError") {
       throw new ApiError(401, "Invalid token format");
     } else if (error.name === "TokenExpiredError") {
+      // Token expiry is a normal flow, not an error - just return 401 without logging
       throw new ApiError(401, "Access token expired");
+    }
+
+    // Only log unexpected errors (not auth-related ones)
+    if (
+      process.env.NODE_ENV !== "production" &&
+      error.message !== "Unauthorized request" &&
+      error.message !== "Access token expired" &&
+      error.message !== "Invalid Access Token - User not found" &&
+      error.message !== "Account not verified"
+    ) {
+      console.error("JWT Verification Error:", error.message);
     }
 
     throw new ApiError(401, error?.message || "Invalid Access Token");

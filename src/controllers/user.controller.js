@@ -217,6 +217,7 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
+  // Clear refresh token from database
   await User.findByIdAndUpdate(
     req.user._id,
     {
@@ -227,12 +228,23 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
-  const cookieOptions = createAuthCookieOptions();
+  // Get cookie options for clearing cookies
+  const accessTokenOptions = getAccessTokenCookieOptions();
+  const refreshTokenOptions = getRefreshTokenCookieOptions();
 
+  // Clear cookies with proper options to ensure they're deleted from the client
   return res
     .status(200)
-    .clearCookie("accessToken", cookieOptions.accessToken)
-    .clearCookie("refreshToken", cookieOptions.refreshToken)
+    .clearCookie("accessToken", {
+      ...accessTokenOptions,
+      maxAge: 0,
+      expires: new Date(0),
+    })
+    .clearCookie("refreshToken", {
+      ...refreshTokenOptions,
+      maxAge: 0,
+      expires: new Date(0),
+    })
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 

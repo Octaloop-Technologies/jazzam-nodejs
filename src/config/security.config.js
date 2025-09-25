@@ -26,17 +26,6 @@ export const securityConfig = {
     },
   },
 
-  // cookies: {
-  //   httpOnly: true,
-  //   secure: true,
-  //   sameSite: "strict",
-  //   domain: "jazzam.ai",
-  //   maxAge: {
-  //     accessToken: 30 * 60 * 1000, // 30 minutes
-  //     refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
-  //   },
-  // },
-
   // CORS Configuration
   cors: {
     allowedOrigins: [process.env.CLIENT_URL],
