@@ -219,16 +219,37 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  // Clear refresh token from database
-  await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      $unset: { refreshToken: 1 },
-    },
-    {
-      new: true,
+  // Try to get user from token if available, but don't require it
+  let user = null;
+
+  try {
+    const token =
+      req.cookies?.accessToken ||
+      req.header("Authorization")?.replace("Bearer ", "");
+
+    if (token) {
+      const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+      user = await User.findById(decodedToken?._id);
     }
-  );
+  } catch (error) {
+    // Token is invalid/expired - that's okay for logout
+    console.log(
+      "Token invalid/expired during logout - proceeding with cookie clearing"
+    );
+  }
+
+  // Clear refresh token from database if user exists
+  if (user) {
+    await User.findByIdAndUpdate(
+      user._id,
+      {
+        $unset: { refreshToken: 1 },
+      },
+      {
+        new: true,
+      }
+    );
+  }
 
   // Get cookie options for clearing cookies - use special clear options
   const accessTokenOptions = getClearAccessTokenCookieOptions();
