@@ -13,9 +13,9 @@ export const securityConfig = {
 
   // Cookie Configuration
   cookies: {
-    httpOnly: process.env.NODE_ENV === "production",
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    httpOnly: process.env.NODE_ENV === "production" ? true : false,
+    secure: process.env.NODE_ENV === "production" ? true : false,
+    sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
     domain:
       process.env.NODE_ENV === "production"
         ? process.env.COOKIE_DOMAIN
@@ -90,7 +90,7 @@ export const securityConfig = {
     cookie: {
       secure: process.env.NODE_ENV === "production", // HTTPS only in production
       httpOnly: true, // Always secure for session cookies
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
       domain:
         process.env.NODE_ENV === "production"
           ? process.env.COOKIE_DOMAIN || undefined
@@ -184,18 +184,14 @@ export const validateEnvironment = () => {
 // ==============================================================
 
 export const getCookieOptions = (tokenType = "accessToken") => {
-  const isProduction = process.env.NODE_ENV === "production";
-
   const options = {
-    httpOnly: isProduction ? true : false,
-    secure: isProduction,
-    sameSite: isProduction ? "strict" : "lax",
-    domain: isProduction ? process.env.COOKIE_DOMAIN || undefined : "localhost",
+    httpOnly: securityConfig.cookies.httpOnly,
+    secure: securityConfig.cookies.secure,
+    sameSite: securityConfig.cookies.sameSite,
+    domain: securityConfig.cookies.domain,
     maxAge: securityConfig.cookies.maxAge[tokenType],
     path: "/",
   };
-
-  console.log(`Cookie options for ${tokenType}:`, options);
 
   return options;
 };

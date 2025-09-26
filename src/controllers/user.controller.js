@@ -8,6 +8,7 @@ import { Validator } from "../utils/validator.js";
 import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
+  securityConfig,
 } from "../config/security.config.js";
 import {
   sendHtmlRedirect,
@@ -228,15 +229,27 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
-  // Get cookie options for clearing cookies
-  const accessTokenOptions = getAccessTokenCookieOptions();
-  const refreshTokenOptions = getRefreshTokenCookieOptions();
-
   // Clear cookies with proper options to ensure they're deleted from the client
   return res
     .status(200)
-    .clearCookie("accessToken", accessTokenOptions)
-    .clearCookie("refreshToken", refreshTokenOptions)
+    .clearCookie("accessToken", {
+      httpOnly: securityConfig.cookies.httpOnly,
+      secure: securityConfig.cookies.secure,
+      sameSite: securityConfig.cookies.sameSite,
+      domain: securityConfig.cookies.domain,
+      maxAge: 0,
+      path: "/",
+      expires: new Date(0),
+    })
+    .clearCookie("refreshToken", {
+      httpOnly: securityConfig.cookies.httpOnly,
+      secure: securityConfig.cookies.secure,
+      sameSite: securityConfig.cookies.sameSite,
+      domain: securityConfig.cookies.domain,
+      maxAge: 0,
+      path: "/",
+      expires: new Date(0),
+    })
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 
