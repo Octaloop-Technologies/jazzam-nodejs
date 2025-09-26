@@ -228,89 +228,15 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
-  // Get cookie options for clearing cookies - must match exactly what was used when setting
+  // Get cookie options for clearing cookies
   const accessTokenOptions = getAccessTokenCookieOptions();
   const refreshTokenOptions = getRefreshTokenCookieOptions();
 
-  console.log("Clearing cookies with options:", {
-    accessTokenOptions,
-    refreshTokenOptions,
-  });
-  console.log("Current cookies in request:", req.cookies);
-
   // Clear cookies with proper options to ensure they're deleted from the client
-  // Must use exact same options that were used when setting the cookies
-  res.clearCookie("accessToken", accessTokenOptions);
-  res.clearCookie("refreshToken", refreshTokenOptions);
-
-  // Also try clearing with additional variations to ensure deletion
-  const isProduction = process.env.NODE_ENV === "production";
-  if (isProduction) {
-    // Try clearing with jazzam.ai domain (exact match)
-    res.clearCookie("accessToken", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      domain: "jazzam.ai",
-      path: "/",
-    });
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      domain: "jazzam.ai",
-      path: "/",
-    });
-
-    // Try clearing with .jazzam.ai domain (subdomain match)
-    res.clearCookie("accessToken", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      domain: ".jazzam.ai",
-      path: "/",
-    });
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      domain: ".jazzam.ai",
-      path: "/",
-    });
-
-    // Try clearing without domain (fallback)
-    res.clearCookie("accessToken", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      path: "/",
-    });
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      path: "/",
-    });
-  } else {
-    // Development mode - try different variations
-    res.clearCookie("accessToken", {
-      httpOnly: false,
-      secure: false,
-      sameSite: "lax",
-      domain: "localhost",
-      path: "/",
-    });
-    res.clearCookie("refreshToken", {
-      httpOnly: false,
-      secure: false,
-      sameSite: "lax",
-      domain: "localhost",
-      path: "/",
-    });
-  }
-
   return res
     .status(200)
+    .clearCookie("accessToken", accessTokenOptions)
+    .clearCookie("refreshToken", refreshTokenOptions)
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 
