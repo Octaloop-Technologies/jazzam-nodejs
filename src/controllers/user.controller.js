@@ -8,7 +8,8 @@ import { Validator } from "../utils/validator.js";
 import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
-  securityConfig,
+  getClearAccessTokenCookieOptions,
+  getClearRefreshTokenCookieOptions,
 } from "../config/security.config.js";
 import {
   sendHtmlRedirect,
@@ -229,27 +230,23 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
+  // Get cookie options for clearing cookies - use special clear options
+  const accessTokenOptions = getClearAccessTokenCookieOptions();
+  const refreshTokenOptions = getClearRefreshTokenCookieOptions();
+
+  // Debug logging for cookie clearing
+  if (process.env.NODE_ENV === "development") {
+    console.log("Clearing cookies with options:", {
+      accessToken: accessTokenOptions,
+      refreshToken: refreshTokenOptions,
+    });
+  }
+
   // Clear cookies with proper options to ensure they're deleted from the client
   return res
     .status(200)
-    .clearCookie("accessToken", {
-      httpOnly: securityConfig.cookies.httpOnly,
-      secure: securityConfig.cookies.secure,
-      sameSite: securityConfig.cookies.sameSite,
-      domain: securityConfig.cookies.domain,
-      maxAge: 0,
-      path: "/",
-      expires: new Date(0),
-    })
-    .clearCookie("refreshToken", {
-      httpOnly: securityConfig.cookies.httpOnly,
-      secure: securityConfig.cookies.secure,
-      sameSite: securityConfig.cookies.sameSite,
-      domain: securityConfig.cookies.domain,
-      maxAge: 0,
-      path: "/",
-      expires: new Date(0),
-    })
+    .clearCookie("accessToken", accessTokenOptions)
+    .clearCookie("refreshToken", refreshTokenOptions)
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 
@@ -574,8 +571,8 @@ const deleteAccount = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .clearCookie("accessToken", getAccessTokenCookieOptions())
-    .clearCookie("refreshToken", getRefreshTokenCookieOptions())
+    .clearCookie("accessToken", getClearAccessTokenCookieOptions())
+    .clearCookie("refreshToken", getClearRefreshTokenCookieOptions())
     .json(new ApiResponse(200, null, "Account deleted successfully"));
 });
 

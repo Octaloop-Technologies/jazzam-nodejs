@@ -18,8 +18,8 @@ export const securityConfig = {
     sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
     domain:
       process.env.NODE_ENV === "production"
-        ? process.env.COOKIE_DOMAIN
-        : "localhost",
+        ? process.env.COOKIE_DOMAIN || undefined // Use undefined if not set
+        : undefined, // Don't set domain in development - let browser handle it
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
       refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -196,7 +196,27 @@ export const getCookieOptions = (tokenType = "accessToken") => {
   return options;
 };
 
+// Special function for clearing cookies - must match exact options used when setting
+export const getClearCookieOptions = (tokenType = "accessToken") => {
+  const options = {
+    httpOnly: securityConfig.cookies.httpOnly,
+    secure: securityConfig.cookies.secure,
+    sameSite: securityConfig.cookies.sameSite,
+    domain: securityConfig.cookies.domain,
+    path: "/",
+    expires: new Date(0), // Set to epoch time to clear the cookie
+  };
+
+  return options;
+};
+
 export const getAccessTokenCookieOptions = () =>
   getCookieOptions("accessToken");
 export const getRefreshTokenCookieOptions = () =>
   getCookieOptions("refreshToken");
+
+// Clear cookie options - use these for clearing cookies
+export const getClearAccessTokenCookieOptions = () =>
+  getClearCookieOptions("accessToken");
+export const getClearRefreshTokenCookieOptions = () =>
+  getClearCookieOptions("refreshToken");
