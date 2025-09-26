@@ -235,16 +235,8 @@ const logoutUser = asyncHandler(async (req, res) => {
   // Clear cookies with proper options to ensure they're deleted from the client
   return res
     .status(200)
-    .clearCookie("accessToken", {
-      ...accessTokenOptions,
-      maxAge: 0,
-      expires: new Date(0),
-    })
-    .clearCookie("refreshToken", {
-      ...refreshTokenOptions,
-      maxAge: 0,
-      expires: new Date(0),
-    })
+    .clearCookie("accessToken", accessTokenOptions)
+    .clearCookie("refreshToken", refreshTokenOptions)
     .json(new ApiResponse(200, null, "User Logged Out Successfully"));
 });
 
