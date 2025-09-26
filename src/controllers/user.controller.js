@@ -261,6 +261,15 @@ const logoutUser = asyncHandler(async (req, res) => {
       accessToken: accessTokenOptions,
       refreshToken: refreshTokenOptions,
     });
+  } else {
+    // Also log in production for debugging
+    console.log("Production cookie clearing options:", {
+      accessToken: accessTokenOptions,
+      refreshToken: refreshTokenOptions,
+      domain: accessTokenOptions.domain,
+      secure: accessTokenOptions.secure,
+      sameSite: accessTokenOptions.sameSite,
+    });
   }
 
   // Clear cookies with proper options to ensure they're deleted from the client

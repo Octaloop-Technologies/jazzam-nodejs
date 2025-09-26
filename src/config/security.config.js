@@ -18,7 +18,7 @@ export const securityConfig = {
     sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
     domain:
       process.env.NODE_ENV === "production"
-        ? process.env.COOKIE_DOMAIN || undefined // Use undefined if not set
+        ? process.env.COOKIE_DOMAIN || ".jazzam.ai" // Default to .jazzam.ai if not set
         : undefined, // Don't set domain in development - let browser handle it
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
