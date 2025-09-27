@@ -219,58 +219,23 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  // Try to get user from token if available, but don't require it
-  let user = null;
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized request");
+  }
 
-  try {
-    const token =
-      req.cookies?.accessToken ||
-      req.header("Authorization")?.replace("Bearer ", "");
-
-    if (token) {
-      const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-      user = await User.findById(decodedToken?._id);
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $unset: { refreshToken: 1 },
+    },
+    {
+      new: true,
     }
-  } catch (error) {
-    // Token is invalid/expired - that's okay for logout
-    console.log(
-      "Token invalid/expired during logout - proceeding with cookie clearing"
-    );
-  }
-
-  // Clear refresh token from database if user exists
-  if (user) {
-    await User.findByIdAndUpdate(
-      user._id,
-      {
-        $unset: { refreshToken: 1 },
-      },
-      {
-        new: true,
-      }
-    );
-  }
+  );
 
   // Get cookie options for clearing cookies - use special clear options
   const accessTokenOptions = getClearAccessTokenCookieOptions();
   const refreshTokenOptions = getClearRefreshTokenCookieOptions();
-
-  // Debug logging for cookie clearing
-  if (process.env.NODE_ENV === "development") {
-    console.log("Clearing cookies with options:", {
-      accessToken: accessTokenOptions,
-      refreshToken: refreshTokenOptions,
-    });
-  } else {
-    // Also log in production for debugging
-    console.log("Production cookie clearing options:", {
-      accessToken: accessTokenOptions,
-      refreshToken: refreshTokenOptions,
-      domain: accessTokenOptions.domain,
-      secure: accessTokenOptions.secure,
-      sameSite: accessTokenOptions.sameSite,
-    });
-  }
 
   // Clear cookies with proper options to ensure they're deleted from the client
   return res

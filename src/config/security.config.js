@@ -15,7 +15,7 @@ export const securityConfig = {
   cookies: {
     httpOnly: process.env.NODE_ENV === "production" ? true : false,
     secure: process.env.NODE_ENV === "production" ? true : false,
-    sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+    sameSite: "lax",
     domain:
       process.env.NODE_ENV === "production"
         ? process.env.COOKIE_DOMAIN || ".jazzam.ai" // Default to .jazzam.ai if not set
@@ -90,7 +90,7 @@ export const securityConfig = {
     cookie: {
       secure: process.env.NODE_ENV === "production", // HTTPS only in production
       httpOnly: true, // Always secure for session cookies
-      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      sameSite: "lax",
       domain:
         process.env.NODE_ENV === "production"
           ? process.env.COOKIE_DOMAIN || undefined
@@ -204,7 +204,7 @@ export const getClearCookieOptions = (tokenType = "accessToken") => {
     sameSite: securityConfig.cookies.sameSite,
     domain: securityConfig.cookies.domain,
     path: "/",
-    expires: new Date(0), // Set to epoch time to clear the cookie
+    expires: new Date(0),
   };
 
   return options;
