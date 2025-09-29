@@ -41,11 +41,11 @@ const handleSuccessfulOAuth = async (
     // Generate redirect URL with provider info
     const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
       path: "/super-user",
-      params: {
-        login: "success",
-        provider: provider,
-        ...additionalParams,
-      },
+      // params: {
+      //   login: "success",
+      //   provider: provider,
+      //   ...additionalParams,
+      // },
     });
 
     // Send HTML redirect with cookies
