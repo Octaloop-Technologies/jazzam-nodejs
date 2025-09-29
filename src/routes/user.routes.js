@@ -57,14 +57,14 @@ router.route("/auth/zohocrm/callback").get(zohoCrmLoginUser);
 // POST /api/v1/users/auth/refresh-token
 router.route("/auth/refresh-token").post(refreshAccessToken);
 
-// POST /api/v1/users/auth/logout
-router.route("/auth/logout").post(logoutUser);
-
 // ================================================
 // Secured routes
 // ================================================
 
 router.use(verifyJWT);
+
+// POST /api/v1/users/auth/logout
+router.route("/auth/logout").post(logoutUser);
 
 // POST /api/v1/users/auth/change-password
 router.route("/auth/change-password").post(changeCurrentPassword);
