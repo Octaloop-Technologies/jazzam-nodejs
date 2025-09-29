@@ -203,6 +203,7 @@ export const getClearCookieOptions = (tokenType = "accessToken") => {
     secure: securityConfig.cookies.secure,
     sameSite: securityConfig.cookies.sameSite,
     domain: securityConfig.cookies.domain,
+    maxAge: securityConfig.cookies.maxAge[tokenType],
     path: "/",
     expires: new Date(0),
   };
