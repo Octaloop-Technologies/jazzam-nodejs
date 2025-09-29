@@ -208,6 +208,8 @@ export const getClearCookieOptions = (tokenType = "accessToken") => {
     expires: new Date(0),
   };
 
+  console.log("Cookie options:", options);
+
   return options;
 };
 
