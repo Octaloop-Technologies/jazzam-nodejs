@@ -13,13 +13,13 @@ export const securityConfig = {
 
   // Cookie Configuration
   cookies: {
-    httpOnly: process.env.NODE_ENV === "production",
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    httpOnly: process.env.NODE_ENV === "production" ? true : false,
+    secure: process.env.NODE_ENV === "production" ? true : false,
+    sameSite: "lax",
     domain:
       process.env.NODE_ENV === "production"
-        ? process.env.COOKIE_DOMAIN
-        : "localhost",
+        ? process.env.COOKIE_DOMAIN || ".jazzam.ai" // Default to .jazzam.ai if not set
+        : undefined, // Don't set domain in development - let browser handle it
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
       refreshToken: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -90,7 +90,7 @@ export const securityConfig = {
     cookie: {
       secure: process.env.NODE_ENV === "production", // HTTPS only in production
       httpOnly: true, // Always secure for session cookies
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      sameSite: "lax",
       domain:
         process.env.NODE_ENV === "production"
           ? process.env.COOKIE_DOMAIN || undefined
@@ -184,18 +184,28 @@ export const validateEnvironment = () => {
 // ==============================================================
 
 export const getCookieOptions = (tokenType = "accessToken") => {
-  const isProduction = process.env.NODE_ENV === "production";
-
   const options = {
-    httpOnly: isProduction ? true : false,
-    secure: isProduction,
-    sameSite: isProduction ? "strict" : "lax",
-    domain: isProduction ? process.env.COOKIE_DOMAIN || undefined : "localhost",
+    httpOnly: securityConfig.cookies.httpOnly,
+    secure: securityConfig.cookies.secure,
+    sameSite: securityConfig.cookies.sameSite,
+    domain: securityConfig.cookies.domain,
     maxAge: securityConfig.cookies.maxAge[tokenType],
     path: "/",
   };
 
-  console.log(`Cookie options for ${tokenType}:`, options);
+  return options;
+};
+
+// Special function for clearing cookies - must match exact options used when setting
+export const getClearCookieOptions = (tokenType = "accessToken") => {
+  const options = {
+    httpOnly: securityConfig.cookies.httpOnly,
+    secure: securityConfig.cookies.secure,
+    sameSite: securityConfig.cookies.sameSite,
+    domain: securityConfig.cookies.domain,
+    path: "/",
+    expires: new Date(0),
+  };
 
   return options;
 };
@@ -204,3 +214,9 @@ export const getAccessTokenCookieOptions = () =>
   getCookieOptions("accessToken");
 export const getRefreshTokenCookieOptions = () =>
   getCookieOptions("refreshToken");
+
+// Clear cookie options - use these for clearing cookies
+export const getClearAccessTokenCookieOptions = () =>
+  getClearCookieOptions("accessToken");
+export const getClearRefreshTokenCookieOptions = () =>
+  getClearCookieOptions("refreshToken");

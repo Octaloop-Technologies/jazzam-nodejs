@@ -8,6 +8,8 @@ import { Validator } from "../utils/validator.js";
 import {
   getAccessTokenCookieOptions,
   getRefreshTokenCookieOptions,
+  getClearAccessTokenCookieOptions,
+  getClearRefreshTokenCookieOptions,
 } from "../config/security.config.js";
 import {
   sendHtmlRedirect,
@@ -217,7 +219,10 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  // Clear refresh token from database
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
   await User.findByIdAndUpdate(
     req.user._id,
     {
@@ -228,9 +233,9 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
-  // Get cookie options for clearing cookies
-  const accessTokenOptions = getAccessTokenCookieOptions();
-  const refreshTokenOptions = getRefreshTokenCookieOptions();
+  // Get cookie options for clearing cookies - use special clear options
+  const accessTokenOptions = getClearAccessTokenCookieOptions();
+  const refreshTokenOptions = getClearRefreshTokenCookieOptions();
 
   // Clear cookies with proper options to ensure they're deleted from the client
   return res
@@ -561,8 +566,8 @@ const deleteAccount = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .clearCookie("accessToken", getAccessTokenCookieOptions())
-    .clearCookie("refreshToken", getRefreshTokenCookieOptions())
+    .clearCookie("accessToken", getClearAccessTokenCookieOptions())
+    .clearCookie("refreshToken", getClearRefreshTokenCookieOptions())
     .json(new ApiResponse(200, null, "Account deleted successfully"));
 });
 
