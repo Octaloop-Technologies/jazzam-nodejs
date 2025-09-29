@@ -6,21 +6,18 @@ class WebhookService {
       process.env.MAKE_WEBHOOK_URL ||
       "https://hook.eu2.make.com/wi3fcb78kawlmocru2qlocbm5e5jhho7";
     this.timeout = 10000; // 10 seconds timeout
-    this.retryAttempts = 3;
+    this.retryAttempts = 1;
     this.retryDelay = 2000; // 2 seconds
   }
 
   /**
    * Send lead data to Make.com webhook
    * @param {Object} leadData - The lead data to send
-   * @param {number} attempt - Current retry attempt (default: 1)
    * @returns {Promise<Object>} - Webhook response
    */
-  async sendLeadToWebhook(leadData, attempt = 1) {
+  async sendLeadToWebhook(leadData) {
     try {
-      console.log(
-        `[Webhook] Attempting to send lead data to Make.com (attempt ${attempt}/${this.retryAttempts})`
-      );
+      console.log(`[Webhook] Attempting to send lead data to Make.com`);
 
       // Prepare the payload for Make.com
       const payload = this.prepareLeadPayload(leadData);
@@ -40,34 +37,18 @@ class WebhookService {
       }
 
       const responseData = await response.json();
-      console.log(
-        `[Webhook] Successfully sent lead data to Make.com on attempt ${attempt}`
-      );
+      console.log(`[Webhook] Successfully sent lead data to Make.com`);
 
       return {
         success: true,
-        attempt,
         response: responseData,
         leadId: leadData._id,
       };
     } catch (error) {
-      console.error(`[Webhook] Attempt ${attempt} failed:`, error.message);
-
-      // Retry logic
-      if (attempt < this.retryAttempts) {
-        console.log(`[Webhook] Retrying in ${this.retryDelay}ms...`);
-        await this.delay(this.retryDelay);
-        return this.sendLeadToWebhook(leadData, attempt + 1);
-      }
-
-      // All retries failed
-      console.error(
-        `[Webhook] All ${this.retryAttempts} attempts failed for lead ${leadData._id}`
-      );
+      console.error(`[Webhook] Failed to send lead data:`, error.message);
 
       return {
         success: false,
-        attempt,
         error: error.message,
         leadId: leadData._id,
       };
