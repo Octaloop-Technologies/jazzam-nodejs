@@ -519,6 +519,43 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
     );
 });
 
+const updateOnboardingStatus = asyncHandler(async (req, res) => {
+  const { completed, currentStep, completedSteps, skipped } = req.body;
+
+  const updateData = {};
+
+  if (completed !== undefined) {
+    updateData["onboarding.completed"] = completed;
+    if (completed) {
+      updateData["onboarding.completedAt"] = new Date();
+    }
+  }
+
+  if (currentStep !== undefined) {
+    updateData["onboarding.currentStep"] = currentStep;
+  }
+
+  if (completedSteps !== undefined) {
+    updateData["onboarding.completedSteps"] = completedSteps;
+  }
+
+  if (skipped !== undefined) {
+    updateData["onboarding.skipped"] = skipped;
+  }
+
+  const company = await Company.findByIdAndUpdate(
+    req.company._id,
+    { $set: updateData },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, company, "Onboarding status updated successfully")
+    );
+});
+
 const updateCompanyLogo = asyncHandler(async (req, res) => {
   const logoLocalPath = req.file?.path;
 
@@ -612,6 +649,7 @@ export {
   changeCurrentPassword,
   getCurrentCompany,
   updateCompanyDetails,
+  updateOnboardingStatus,
   updateCompanyLogo,
   updateSubscriptionStatus,
   deleteCompany,

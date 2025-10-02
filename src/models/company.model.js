@@ -180,6 +180,29 @@ const companySchema = new Schema(
     lastLoginAt: {
       type: Date,
     },
+
+    // Onboarding
+    onboarding: {
+      completed: {
+        type: Boolean,
+        default: false,
+      },
+      currentStep: {
+        type: Number,
+        default: 0,
+      },
+      completedSteps: {
+        type: [Number],
+        default: [],
+      },
+      skipped: {
+        type: Boolean,
+        default: false,
+      },
+      completedAt: {
+        type: Date,
+      },
+    },
   },
   {
     timestamps: true,

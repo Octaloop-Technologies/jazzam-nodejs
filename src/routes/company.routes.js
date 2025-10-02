@@ -11,6 +11,7 @@ import {
   refreshAccessToken,
   registerCompany,
   updateCompanyDetails,
+  updateOnboardingStatus,
   updateCompanyLogo,
   updateSubscriptionStatus,
 } from "../controllers/company.controller.js";
@@ -69,6 +70,9 @@ router.route("/auth/current-company").get(getCurrentCompany);
 
 // PATCH /api/v1/companies/auth/update-company
 router.route("/auth/update-company").patch(updateCompanyDetails);
+
+// PATCH /api/v1/companies/auth/onboarding
+router.route("/auth/onboarding").patch(updateOnboardingStatus);
 
 // ================================================
 // Company settings routes
