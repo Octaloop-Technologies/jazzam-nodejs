@@ -1,0 +1,269 @@
+import mongoose, { Schema } from "mongoose";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { securityConfig } from "../config/security.config.js";
+
+const companySchema = new Schema(
+  {
+    // Basic Company Information
+    companyName: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      index: true,
+    },
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+    },
+
+    // Company Details
+    website: {
+      type: String,
+      trim: true,
+    },
+    industry: {
+      type: String,
+      trim: true,
+    },
+    companySize: {
+      type: String,
+      enum: ["1-10", "11-50", "51-200", "201-500", "500+"],
+    },
+
+    // Contact Information
+    contactPerson: {
+      name: {
+        type: String,
+        trim: true,
+      },
+      phone: {
+        type: String,
+        trim: true,
+      },
+    },
+
+    // Subscription Management
+    subscriptionStatus: {
+      type: String,
+      enum: ["trial", "active", "pending_payment", "cancelled", "expired"],
+      default: "trial",
+    },
+    subscriptionPlan: {
+      type: String,
+      enum: ["free", "basic", "premium", "enterprise"],
+      default: "free",
+    },
+    trialEndDate: {
+      type: Date,
+      default: () => new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
+    },
+    subscriptionStartDate: {
+      type: Date,
+    },
+    subscriptionEndDate: {
+      type: Date,
+    },
+
+    // Payment Information
+    paymentMethod: {
+      type: String,
+      enum: ["none", "stripe", "paypal", "bank_transfer"],
+      default: "none",
+    },
+    paymentDetails: {
+      stripeCustomerId: String,
+      stripeSubscriptionId: String,
+      lastPaymentDate: Date,
+      nextPaymentDate: Date,
+    },
+
+    // Company Settings
+    settings: {
+      timezone: {
+        type: String,
+        default: "UTC",
+      },
+      currency: {
+        type: String,
+        default: "USD",
+      },
+      language: {
+        type: String,
+        default: "en",
+      },
+      emailNotifications: {
+        type: Boolean,
+        default: true,
+      },
+      leadNotifications: {
+        type: Boolean,
+        default: true,
+      },
+    },
+
+    // Company Branding
+    logo: {
+      url: {
+        type: String,
+      },
+      public_id: {
+        type: String,
+      },
+    },
+
+    // Authentication
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationToken: {
+      type: String,
+    },
+    verificationTokenExpiry: {
+      type: Date,
+    },
+
+    // OAuth Integration
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    zohoId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    provider: {
+      type: String,
+      enum: ["local", "google", "zoho"],
+      default: "local",
+    },
+    refreshToken: {
+      type: String,
+    },
+
+    // Usage Tracking
+    usageStats: {
+      totalLeads: {
+        type: Number,
+        default: 0,
+      },
+      leadsThisMonth: {
+        type: Number,
+        default: 0,
+      },
+      formsCreated: {
+        type: Number,
+        default: 0,
+      },
+      emailsSent: {
+        type: Number,
+        default: 0,
+      },
+    },
+
+    // Status
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLoginAt: {
+      type: Date,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Hash password before saving
+companySchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+// Check if password is correct
+companySchema.methods.isPasswordCorrect = async function (password) {
+  return await bcrypt.compare(password, this.password);
+};
+
+// Generate access and refresh token
+companySchema.methods.generateAccessToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+      companyName: this.companyName,
+      email: this.email,
+    },
+    securityConfig.jwt.accessTokenSecret,
+    {
+      expiresIn: securityConfig.jwt.accessTokenExpiry,
+    }
+  );
+};
+
+companySchema.methods.generateRefreshToken = function () {
+  return jwt.sign(
+    {
+      _id: this._id,
+    },
+    securityConfig.jwt.refreshTokenSecret,
+    {
+      expiresIn: securityConfig.jwt.refreshTokenExpiry,
+    }
+  );
+};
+
+// Check if company is on trial
+companySchema.methods.isOnTrial = function () {
+  return this.subscriptionStatus === "trial" && this.trialEndDate > new Date();
+};
+
+// Check if company has active subscription
+companySchema.methods.hasActiveSubscription = function () {
+  return (
+    this.subscriptionStatus === "active" &&
+    this.subscriptionEndDate &&
+    this.subscriptionEndDate > new Date()
+  );
+};
+
+// Check if company can access premium features
+companySchema.methods.canAccessPremiumFeatures = function () {
+  return this.hasActiveSubscription() || this.isOnTrial();
+};
+
+// Update usage stats
+companySchema.methods.incrementLeadCount = function () {
+  this.usageStats.totalLeads += 1;
+  this.usageStats.leadsThisMonth += 1;
+  return this.save();
+};
+
+companySchema.methods.incrementFormCount = function () {
+  this.usageStats.formsCreated += 1;
+  return this.save();
+};
+
+companySchema.methods.incrementEmailCount = function () {
+  this.usageStats.emailsSent += 1;
+  return this.save();
+};
+
+// Create indexes for better query performance
+companySchema.index({ subscriptionPlan: 1 });
+companySchema.index({ isActive: 1 });
+companySchema.index({ createdAt: -1 });
+
+export const Company = mongoose.model("Company", companySchema);

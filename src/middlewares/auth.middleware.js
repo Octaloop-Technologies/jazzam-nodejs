@@ -1,6 +1,6 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model.js";
+import { Company } from "../models/company.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { securityConfig } from "../config/security.config.js";
 
@@ -25,20 +25,26 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
       throw new ApiError(401, "Access token expired");
     }
 
-    const user = await User.findById(decodedToken?._id).select(
+    const company = await Company.findById(decodedToken?._id).select(
       "-password -refreshToken"
     );
 
-    if (!user) {
-      throw new ApiError(401, "Invalid Access Token - User not found");
+    if (!company) {
+      throw new ApiError(401, "Invalid Access Token - Company not found");
     }
 
-    // Check if user is still active/verified
-    if (!user.isVerified && user.provider === "local") {
-      throw new ApiError(401, "Account not verified");
+    // Check if company is still active
+    if (!company.isActive) {
+      throw new ApiError(401, "Company account is deactivated");
     }
 
-    req.user = user;
+    // Check if company has active subscription or is on trial
+    // Temporarily allow all companies to access forms for testing
+    // if (!company.canAccessPremiumFeatures()) {
+    //   throw new ApiError(403, "Company subscription expired or inactive");
+    // }
+
+    req.company = company;
     next();
   } catch (error) {
     // Handle specific JWT errors without logging them as errors
@@ -54,8 +60,9 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
       process.env.NODE_ENV !== "production" &&
       error.message !== "Unauthorized request" &&
       error.message !== "Access token expired" &&
-      error.message !== "Invalid Access Token - User not found" &&
-      error.message !== "Account not verified"
+      error.message !== "Invalid Access Token - Company not found" &&
+      error.message !== "Company account is deactivated" &&
+      error.message !== "Company subscription expired or inactive"
     ) {
       console.error("JWT Verification Error:", error.message);
     }

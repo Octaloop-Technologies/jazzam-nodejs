@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as JwtStrategy, ExtractJwt } from "passport-jwt";
-import { User } from "../models/user.model.js";
+import { Company } from "../models/company.model.js";
 
 // JWT Strategy for protecting routes
 passport.use(
@@ -15,11 +15,11 @@ passport.use(
     },
     async (payload, done) => {
       try {
-        const user = await User.findById(payload._id).select(
+        const company = await Company.findById(payload._id).select(
           "-password -refreshToken"
         );
-        if (user) {
-          return done(null, user);
+        if (company) {
+          return done(null, company);
         }
         return done(null, false);
       } catch (error) {
@@ -29,50 +29,50 @@ passport.use(
   )
 );
 
-// Google OAuth Strategy
+// Google OAuth Strategy for Companies
 passport.use(
+  "google",
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      callbackURL: process.env.GOOGLE_COMPANY_CALLBACK_URL,
     },
     async (req, accessToken, refreshToken, profile, done) => {
       try {
-        // Check if user already exists with this Google ID
-        let user = await User.findOne({ googleId: profile.id });
+        // Check if company already exists with this Google ID
+        let company = await Company.findOne({ googleId: profile.id });
 
-        if (user) {
-          return done(null, user);
+        if (company) {
+          return done(null, company);
         }
 
-        // Check if user exists with same email
-        user = await User.findOne({ email: profile.emails[0].value });
+        // Check if company exists with same email
+        company = await Company.findOne({ email: profile.emails[0].value });
 
-        if (user) {
-          // Link Google account to existing user
-          user.googleId = profile.id;
-          user.provider = "google";
-          await user.save();
-          return done(null, user);
+        if (company) {
+          // Link Google account to existing company
+          company.googleId = profile.id;
+          company.provider = "google";
+          await company.save();
+          return done(null, company);
         }
 
-        // Create new user
-        const newUser = await User.create({
-          name: profile.emails[0].value.split("@")[0].toLowerCase(),
+        // Create new company
+        const newCompany = await Company.create({
+          companyName: profile.emails[0].value.split("@")[0].toLowerCase(),
           email: profile.emails[0].value,
-          fullName: profile.displayName,
           googleId: profile.id,
           provider: "google",
-          password: "google_oauth_user", // placeholder password
+          password: "google_oauth_company", // placeholder password
           isVerified: true,
-          avatar: {
+          logo: {
             url: profile.photos[0]?.value || "https://via.placeholder.com/150",
             public_id: `google_${profile.id}`,
           },
         });
 
-        return done(null, newUser);
+        return done(null, newCompany);
       } catch (error) {
         return done(error, null);
       }
@@ -80,16 +80,21 @@ passport.use(
   )
 );
 
-// Serialize user for session
-passport.serializeUser((user, done) => {
-  done(null, user._id);
+// Serialize company for session
+passport.serializeUser((company, done) => {
+  done(null, { id: company._id, type: company.constructor.modelName });
 });
 
-// Deserialize user from session
-passport.deserializeUser(async (id, done) => {
+// Deserialize company from session
+passport.deserializeUser(async (data, done) => {
   try {
-    const user = await User.findById(id).select("-password -refreshToken");
-    done(null, user);
+    let entity;
+    if (data.type === "Company") {
+      entity = await Company.findById(data.id).select(
+        "-password -refreshToken"
+      );
+    }
+    done(null, entity);
   } catch (error) {
     done(error, null);
   }

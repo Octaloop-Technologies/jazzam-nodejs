@@ -19,6 +19,11 @@ import {
   errorHandler,
   notFoundHandler,
 } from "./middlewares/error.middleware.js";
+import {
+  swaggerDefinition,
+  swaggerUi,
+  swaggerUiOptions,
+} from "./config/swagger-simple.config.js";
 
 const app = express();
 
@@ -57,19 +62,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ==========================================================
-// Routes import
-// ==========================================================
-import userRouter from "./routes/user.routes.js";
-import leadRouter from "./routes/lead.routes.js";
-import waitlistRouter from "./routes/waitlist.routes.js";
-import webhookRouter from "./routes/webhook.routes.js";
-
-// ==========================================================
-// Apply auth rate limiting to auth routes specifically
-// ==========================================================
-app.use("/api/v1/users/auth", authRateLimit);
-
-// ==========================================================
 // Root route - API health check
 // ==========================================================
 app.get("/", (req, res) => {
@@ -85,48 +77,71 @@ app.get("/", (req, res) => {
           timestamp: new Date().toISOString(),
           environment: process.env.NODE_ENV || "development",
         }),
+    apiDocumentation: isProduction ? null : "/api-docs-legacy",
   };
 
   res.status(200).json(response);
 });
 
 // ==========================================================
-// API health check endpoint
+// Swagger API Documentation
 // ==========================================================
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "API is healthy",
-    timestamp: new Date().toISOString(),
-  });
+// Serve Swagger UI
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDefinition, swaggerUiOptions)
+);
+
+// Serve Swagger JSON
+app.get("/api-docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerDefinition);
 });
 
-// ==========================================================
-// API documentation endpoint (development only)
-// ==========================================================
+// Legacy API documentation endpoint (development only)
 if (process.env.NODE_ENV !== "production") {
-  app.get("/api-docs", (req, res) => {
+  app.get("/api-docs-legacy", (req, res) => {
     res.status(200).json({
       success: true,
       message: "API Documentation",
       endpoints: {
-        auth: "/api/v1/users/auth",
-        users: "/api/v1/users",
-        leads: "/api/v1/lead",
+        companies: "/api/v1/companies",
+        forms: "/api/v1/forms",
+        leads: "/api/v1/leads",
+        crmIntegration: "/api/v1/crm-integration",
         waitlist: "/api/v1/waitlist",
         webhook: "/api/v1/webhook",
         health: "/health",
       },
       version: "1.0.0",
+      swagger: "/api-docs",
     });
   });
 }
 
 // ==========================================================
+// Routes import
+// ==========================================================
+import companyRouter from "./routes/company.routes.js";
+import formRouter from "./routes/form.routes.js";
+import leadRouter from "./routes/lead.routes.js";
+import crmIntegrationRouter from "./routes/crmIntegration.routes.js";
+import waitlistRouter from "./routes/waitlist.routes.js";
+import webhookRouter from "./routes/webhook.routes.js";
+
+// ==========================================================
+// Apply auth rate limiting to auth routes specifically
+// ==========================================================
+app.use("/api/v1/companies/auth", authRateLimit);
+
+// ==========================================================
 // Routes Declaration
 // ==========================================================
-app.use("/api/v1/users", userRouter);
-app.use("/api/v1/lead", leadRouter);
+app.use("/api/v1/companies", companyRouter);
+app.use("/api/v1/forms", formRouter);
+app.use("/api/v1/leads", leadRouter);
+app.use("/api/v1/crm-integration", crmIntegrationRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
 app.use("/api/v1/webhook", webhookRouter);
 

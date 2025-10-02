@@ -3,13 +3,50 @@ import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const leadSchema = new Schema(
   {
-    // Basic LinkedIn Profile Information
-    linkedinProfileUrl: {
+    // Company Reference (Required for SAAS)
+    companyId: {
+      type: Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+      index: true,
+    },
+
+    // Form Reference (Which form generated this lead)
+    formId: {
+      type: Schema.Types.ObjectId,
+      ref: "Form",
+      required: true,
+      index: true,
+    },
+
+    // Platform Source Information
+    platform: {
       type: String,
-      required: [true, "LinkedIn profile URL is required"],
+      enum: ["linkedin", "meta", "twitter", "instagram", "other"],
+      required: true,
+      index: true,
+    },
+
+    // Platform-specific URL/Identifier
+    platformUrl: {
+      type: String,
+      required: true,
       trim: true,
       index: true,
     },
+
+    // Profile information (works for all platforms)
+    profileUrl: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    profilePic: {
+      type: String,
+      trim: true,
+    },
+
+    // Basic Lead Information
     firstName: {
       type: String,
       trim: true,
@@ -23,10 +60,6 @@ const leadSchema = new Schema(
       trim: true,
       index: true,
     },
-    headline: {
-      type: String,
-      trim: true,
-    },
     email: {
       type: String,
       lowercase: true,
@@ -37,24 +70,8 @@ const leadSchema = new Schema(
       type: String,
       trim: true,
     },
-    followers: {
-      type: Number,
-      default: 0,
-    },
-    connections: {
-      type: Number,
-      default: 0,
-    },
-    publicIdentifier: {
-      type: String,
-      trim: true,
-    },
-    urn: {
-      type: String,
-      trim: true,
-    },
 
-    // Company Information
+    // Company Information (Lead's company)
     company: {
       type: String,
       trim: true,
@@ -69,28 +86,19 @@ const leadSchema = new Schema(
       type: String,
       trim: true,
     },
-    companyLinkedin: {
-      type: String,
-      trim: true,
-    },
-    companyFoundedIn: {
-      type: Number,
-    },
     companySize: {
       type: String,
+      trim: true,
+      index: true,
     },
-
-    // Job Information
     jobTitle: {
       type: String,
       trim: true,
+      index: true,
     },
-    currentJobDuration: {
+    department: {
       type: String,
       trim: true,
-    },
-    currentJobDurationInYrs: {
-      type: Number,
     },
 
     // Location Information
@@ -99,181 +107,83 @@ const leadSchema = new Schema(
       trim: true,
       index: true,
     },
-    addressCountryOnly: {
+    country: {
       type: String,
       trim: true,
     },
-    addressWithCountry: {
-      type: String,
-      trim: true,
-    },
-    addressWithoutCountry: {
+    city: {
       type: String,
       trim: true,
     },
 
-    // Profile Media
-    profilePic: {
+    // Platform-specific scraped data (flexible JSON field)
+    platformData: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
+
+    // Lead Source Information
+    source: {
+      type: String,
+      enum: [
+        "form",
+        "import",
+        "api",
+        "manual",
+        "linkedin",
+        "meta",
+        "twitter",
+        "instagram",
+      ],
+      default: "form",
+      index: true,
+    },
+    sourceUrl: {
       type: String,
       trim: true,
     },
-    profilePicHighQuality: {
+    referrer: {
       type: String,
       trim: true,
     },
-    profilePicAllDimensions: [
-      {
-        width: Number,
-        height: Number,
-        url: String,
-      },
-    ],
-
-    // Profile Content
-    about: {
-      type: String,
-      trim: true,
+    utmParams: {
+      utm_source: String,
+      utm_medium: String,
+      utm_campaign: String,
+      utm_term: String,
+      utm_content: String,
     },
-    creatorWebsite: {
-      name: String,
-      link: String,
-    },
-
-    // Professional Data Arrays
-    experiences: [
-      {
-        companyId: String,
-        companyUrn: String,
-        companyLink1: String,
-        logo: String,
-        title: String,
-        subtitle: String,
-        caption: String,
-        metadata: String,
-        breakdown: Boolean,
-        subComponents: [
-          {
-            title: String,
-            caption: String,
-            metadata: String,
-            description: Schema.Types.Mixed,
-          },
-        ],
-      },
-    ],
-    educations: [
-      {
-        companyId: String,
-        companyUrn: String,
-        companyLink1: String,
-        logo: String,
-        title: String,
-        subtitle: String,
-        breakdown: Boolean,
-        subComponents: [
-          {
-            description: Schema.Types.Mixed,
-          },
-        ],
-      },
-    ],
-    skills: [
-      {
-        title: String,
-        subComponents: [
-          {
-            type: Schema.Types.Mixed,
-          },
-        ],
-      },
-    ],
-    languages: [
-      {
-        title: String,
-        breakdown: Boolean,
-        subComponents: [
-          {
-            description: Schema.Types.Mixed,
-          },
-        ],
-      },
-    ],
-    interests: [
-      {
-        section_name: String,
-        section_components: [
-          {
-            titleV2: String,
-            caption: String,
-            subtitle: String,
-            size: String,
-            textActionTarget: String,
-            subComponents: [
-              {
-                insightComponent: {
-                  text: String,
-                  actionTarget: String,
-                },
-              },
-            ],
-          },
-        ],
-      },
-    ],
-
-    // Additional Arrays
-    // licenseAndCertificates: [Schema.Types.Mixed],
-    // honorsAndAwards: [Schema.Types.Mixed],
-    // volunteerAndAwards: [Schema.Types.Mixed],
-    // verifications: [Schema.Types.Mixed],
-    // promos: [Schema.Types.Mixed],
-    // highlights: [Schema.Types.Mixed],
-    // projects: [Schema.Types.Mixed],
-    // publications: [Schema.Types.Mixed],
-    // patents: [Schema.Types.Mixed],
-    // courses: [Schema.Types.Mixed],
-    // testScores: [Schema.Types.Mixed],
-    // organizations: [Schema.Types.Mixed],
-    // volunteerCauses: [Schema.Types.Mixed],
-    // recommendations: [Schema.Types.Mixed],
-    // updates: [Schema.Types.Mixed],
 
     // BANT (Budget, Authority, Need, Timeline) Lead Qualification Fields
     bant: {
       budget: {
-        value: {
-          type: String,
-          default: "Not available",
-        },
+        value: String,
+        score: { type: Number, min: 0, max: 10 },
       },
       authority: {
-        value: {
-          type: String,
-          default: "Not available",
-        },
-        isDecisionMaker: {
-          type: Boolean,
-          default: false,
-        },
+        value: String,
+        score: { type: Number, min: 0, max: 10 },
+        isDecisionMaker: { type: Boolean, default: false },
       },
       need: {
-        value: {
-          type: String,
-          default: "Not available",
-        },
+        value: String,
+        score: { type: Number, min: 0, max: 10 },
+        urgency: { type: String, enum: ["low", "medium", "high"] },
       },
       timeline: {
-        value: {
+        value: String,
+        score: { type: Number, min: 0, max: 10 },
+        timeframe: {
           type: String,
-          default: "Not available",
+          enum: ["immediate", "1-3 months", "3-6 months", "6+ months"],
         },
       },
     },
 
-    // Lead Management Fields
+    // Lead Management
     status: {
       type: String,
-      enum: ["new", "cold", "warm", "hot", "qualified"],
+      enum: ["new", "hot", "cold", "warm", "qualified"],
       default: "new",
       index: true,
     },
@@ -287,22 +197,115 @@ const leadSchema = new Schema(
     },
     tags: [
       {
-        type: String,
-        trim: true,
+        name: {
+          type: String,
+          trim: true,
+        },
+        color: {
+          type: String,
+          trim: true,
+        },
       },
     ],
-    lastContactDate: {
-      type: Date,
-      default: Date.now,
+
+    // Email Communication Tracking
+    emailStatus: {
+      welcomeSent: {
+        type: Boolean,
+        default: false,
+      },
+      welcomeSentAt: {
+        type: Date,
+      },
+      followUpSent: {
+        type: Boolean,
+        default: false,
+      },
+      followUpSentAt: {
+        type: Date,
+      },
+      followUpScheduledAt: {
+        type: Date,
+      },
+      lastEmailSent: {
+        type: Date,
+      },
+      emailBounced: {
+        type: Boolean,
+        default: false,
+      },
+      emailUnsubscribed: {
+        type: Boolean,
+        default: false,
+      },
     },
-    nextFollowUpDate: {
-      type: Date,
-    },
+
+    // Contact History
+    contactHistory: [
+      {
+        type: {
+          type: String,
+          enum: ["email", "phone", "meeting", "note"],
+          required: true,
+        },
+        subject: {
+          type: String,
+          trim: true,
+        },
+        content: {
+          type: String,
+          trim: true,
+        },
+        timestamp: {
+          type: Date,
+          default: Date.now,
+        },
+        outcome: {
+          type: String,
+          enum: ["positive", "negative", "neutral", "no_response"],
+        },
+      },
+    ],
+
+    // Lead Scoring
     leadScore: {
       type: Number,
       default: 0,
       min: 0,
       max: 100,
+    },
+
+    // CRM Integration
+    crmId: {
+      type: String,
+      trim: true,
+    },
+    crmSyncStatus: {
+      type: String,
+      enum: ["pending", "synced", "failed", "not_synced"],
+      default: "not_synced",
+    },
+    crmSyncAt: {
+      type: Date,
+    },
+
+    // Conversion Tracking
+    conversionData: {
+      converted: {
+        type: Boolean,
+        default: false,
+      },
+      convertedAt: {
+        type: Date,
+      },
+      conversionValue: {
+        type: Number,
+        default: 0,
+      },
+      conversionSource: {
+        type: String,
+        trim: true,
+      },
     },
   },
   {
@@ -311,32 +314,108 @@ const leadSchema = new Schema(
 );
 
 // Create compound indexes for better query performance
-leadSchema.index({ email: 1, company: 1 });
+leadSchema.index({ companyId: 1, email: 1 });
+leadSchema.index({ companyId: 1, status: 1 });
+leadSchema.index({ companyId: 1, formId: 1 });
+leadSchema.index({ companyId: 1, platform: 1 });
+leadSchema.index({ companyId: 1, createdAt: -1 });
+leadSchema.index({ email: 1, companyId: 1 });
 leadSchema.index({ status: 1, companyIndustry: 1 });
 leadSchema.index({ createdAt: -1 });
+
+// Create text index for search functionality
 leadSchema.index({
+  firstName: "text",
+  lastName: "text",
   fullName: "text",
-  company: "text",
   email: "text",
   location: "text",
-  headline: "text",
+  jobTitle: "text",
 });
 
 // Add pagination plugin
 leadSchema.plugin(mongooseAggregatePaginate);
 
-// Static method to find leads by criteria
-leadSchema.statics.findBySearchCriteria = function (searchQuery) {
-  const query = {};
+// Static method to find leads by company and criteria
+leadSchema.statics.findByCompanyAndCriteria = function (
+  companyId,
+  searchQuery
+) {
+  const query = { companyId };
 
   if (searchQuery.status) query.status = searchQuery.status;
+  if (searchQuery.formId) query.formId = searchQuery.formId;
+  if (searchQuery.platform) query.platform = searchQuery.platform;
   if (searchQuery.companyIndustry)
     query.companyIndustry = searchQuery.companyIndustry;
   if (searchQuery.companySize) query.companySize = searchQuery.companySize;
-  if (searchQuery.assignedTo) query.assignedTo = searchQuery.assignedTo;
   if (searchQuery.location) query.location = searchQuery.location;
+  if (searchQuery.source) query.source = searchQuery.source;
+  if (searchQuery.tags) query.tags = { $in: searchQuery.tags };
 
   return this.find(query);
+};
+
+// Instance methods
+leadSchema.methods.updateEmailStatus = function (type, sent = true) {
+  const now = new Date();
+
+  switch (type) {
+    case "welcome":
+      this.emailStatus.welcomeSent = sent;
+      this.emailStatus.welcomeSentAt = sent ? now : null;
+      break;
+    case "followup":
+      this.emailStatus.followUpSent = sent;
+      this.emailStatus.followUpSentAt = sent ? now : null;
+      break;
+  }
+
+  this.emailStatus.lastEmailSent = now;
+  return this.save();
+};
+
+leadSchema.methods.scheduleFollowUp = function (days = 2) {
+  const followUpDate = new Date();
+  followUpDate.setDate(followUpDate.getDate() + days);
+  this.emailStatus.followUpScheduledAt = followUpDate;
+  return this.save();
+};
+
+leadSchema.methods.addContactHistory = function (
+  type,
+  subject,
+  content,
+  outcome = null
+) {
+  this.contactHistory.push({
+    type,
+    subject,
+    content,
+    outcome,
+  });
+  return this.save();
+};
+
+leadSchema.methods.updateLeadScore = function (score) {
+  this.leadScore = Math.max(0, Math.min(100, score));
+  return this.save();
+};
+
+leadSchema.methods.markAsConverted = function (value = 0, source = null) {
+  this.conversionData.converted = true;
+  this.conversionData.convertedAt = new Date();
+  this.conversionData.conversionValue = value;
+  this.conversionData.conversionSource = source;
+  this.status = "converted";
+  return this.save();
+};
+
+leadSchema.methods.syncToCRM = function (crmId) {
+  this.crmId = crmId;
+  this.crmSyncStatus = "synced";
+  this.crmSyncAt = new Date();
+  return this.save();
 };
 
 export const Lead = mongoose.model("Lead", leadSchema);

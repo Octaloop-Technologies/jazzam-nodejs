@@ -1,208 +1,144 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
 import { Lead } from "../models/lead.model.js";
+import { Form } from "../models/form.model.js";
+import { Company } from "../models/company.model.js";
 import { Validator } from "../utils/validator.js";
 import mongoose from "mongoose";
 import webhookService from "../services/webhook.service.js";
+import emailService from "../services/email.service.js";
+import scrapingService from "../services/scraping.service.js";
 
-const apiKey = process.env.APIFY_KEY;
+// ==============================================================
+// Lead Controller Functions
+// ==============================================================
 
-if (!apiKey) {
-  console.error("APIFY_KEY environment variable is not set");
-}
-
-// Create a new lead
+// Create a new lead from form submission
 const createLead = asyncHandler(async (req, res) => {
-  const { linkedinProfileUrl } = req.body;
+  const { formId, formData, sourceUrl, referrer, utmParams } = req.body;
 
-  // Check if API key is available
-  if (!apiKey) {
-    throw new ApiError(
-      500,
-      "LinkedIn scraping service is not configured. Please contact support."
-    );
-  }
+  // Validate required fields
+  const validationRules = {
+    formId: { type: "required" },
+    formData: { type: "required" },
+  };
 
-  // Validate optional fields if provided
-  if (linkedinProfileUrl) {
-    Validator.validateLinkedInUrl(linkedinProfileUrl, "LinkedIn profile", true);
-  }
+  Validator.validateFields(req.body, validationRules);
 
-  // Check if lead with same linkedin profile URL already exists then update it
-  const existingLead = await Lead.findOne({ linkedinProfileUrl });
-  if (existingLead) {
-    await existingLead.updateOne({ linkedinProfileUrl });
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          existingLead,
-          "You have already submitted your LinkedIn profile URL"
-        )
-      );
-  }
-
-  // Step 1: Start Actor
-  const startResponse = await fetch(
-    `https://api.apify.com/v2/acts/dev_fusion~linkedin-profile-scraper/runs?token=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        profileUrls: [linkedinProfileUrl],
-      }),
-    }
-  );
-
-  if (!startResponse.ok) {
-    console.error(
-      "Apify start request failed:",
-      startResponse.status,
-      startResponse.statusText
-    );
-    throw new ApiError(500, "Failed to start LinkedIn scraping process");
-  }
-
-  const startData = await startResponse.json();
-
-  if (!startData.data || !startData.data.id) {
-    console.error("Invalid Apify start response:", startData);
-    throw new ApiError(500, "Failed to start Apify actor");
-  }
-
-  const runId = startData.data.id;
-
-  // Step 2: Poll until run is finished
-  let runStatus = "READY";
-  let datasetId = null;
-
-  while (["READY", "RUNNING"].includes(runStatus)) {
-    const runResponse = await fetch(
-      `https://api.apify.com/v2/actor-runs/${runId}?token=${apiKey}`
-    );
-    const runData = await runResponse.json();
-
-    runStatus = runData.data.status;
-    datasetId = runData.data.defaultDatasetId;
-
-    if (["SUCCEEDED", "FAILED", "ABORTED"].includes(runStatus)) break;
-
-    await new Promise((r) => setTimeout(r, 5000)); // wait 5 sec before checking again
-  }
-
-  if (runStatus !== "SUCCEEDED") {
-    throw new ApiError(500, `Apify run ended with status: ${runStatus}`);
-  }
-
-  // Step 3: Fetch dataset items
-  const datasetResponse = await fetch(
-    `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apiKey}&format=json`
-  );
-
-  if (!datasetResponse.ok) {
-    console.error(
-      "Apify dataset fetch failed:",
-      datasetResponse.status,
-      datasetResponse.statusText
-    );
-    throw new ApiError(500, "Failed to fetch LinkedIn profile data");
-  }
-
-  const results = await datasetResponse.json();
-
-  // Create the lead with sanitized data
-  // Apify returns an array of results, so use the first item
-  const profile = Array.isArray(results) ? results[0] : results;
-
-  // Check if profile data exists
-  if (!profile || typeof profile !== "object") {
-    console.log("Profile data is missing or invalid:", profile);
-    throw new ApiError(
-      500,
-      "No LinkedIn profile data found. The profile might be private or the URL is invalid."
-    );
-  }
-
-  const lead = await Lead.create({
-    // Basic LinkedIn Profile Information
-    linkedinProfileUrl: linkedinProfileUrl,
-    firstName: profile.firstName || null,
-    lastName: profile.lastName || null,
-    fullName: profile.fullName || null,
-    headline: profile.headline || null,
-    email: profile.email || null,
-    phone: profile.mobileNumber || null,
-    followers: profile.followers || 0,
-    connections: profile.connections || 0,
-    publicIdentifier: profile.publicIdentifier || null,
-    urn: profile.urn || null,
-
-    // Company Information
-    company: profile.companyName || null,
-    companyIndustry: profile.companyIndustry || null,
-    companyWebsite: profile.companyWebsite || null,
-    companyLinkedin: profile.companyLinkedin || null,
-    companyFoundedIn: profile.companyFoundedIn || null,
-    companySize: profile.companySize || null,
-
-    // Job Information
-    jobTitle: profile.jobTitle || null,
-    currentJobDuration: profile.currentJobDuration || null,
-    currentJobDurationInYrs: profile.currentJobDurationInYrs || null,
-
-    // Location Information
-    location:
-      profile.addressWithCountry ||
-      profile.addressCountryOnly ||
-      profile.addressWithoutCountry ||
-      null,
-    addressCountryOnly: profile.addressCountryOnly || null,
-    addressWithCountry: profile.addressWithCountry || null,
-    addressWithoutCountry: profile.addressWithoutCountry || null,
-
-    // Profile Media
-    profilePic: profile.profilePic || null,
-    profilePicHighQuality: profile.profilePicHighQuality || null,
-    profilePicAllDimensions: profile.profilePicAllDimensions || [],
-
-    // Profile Content
-    about: profile.about || null,
-    creatorWebsite: profile.creatorWebsite || null,
-
-    // Professional Data Arrays
-    experiences: profile.experiences || [],
-    educations: profile.educations || [],
-    skills: profile.skills || [],
-    languages: profile.languages || [],
-    interests: profile.interests || [],
-
-    // Additional Arrays
-    licenseAndCertificates: profile.licenseAndCertificates || [],
-    honorsAndAwards: profile.honorsAndAwards || [],
-    volunteerAndAwards: profile.volunteerAndAwards || [],
-    verifications: profile.verifications || [],
-    promos: profile.promos || [],
-    highlights: profile.highlights || [],
-    projects: profile.projects || [],
-    publications: profile.publications || [],
-    patents: profile.patents || [],
-    courses: profile.courses || [],
-    testScores: profile.testScores || [],
-    organizations: profile.organizations || [],
-    volunteerCauses: profile.volunteerCauses || [],
-    recommendations: profile.recommendations || [],
-    updates: profile.updates || [],
-
-    // Lead Management Fields
-    status: "new",
-    notes: "",
-    assignedTo: null,
-    tags: [],
+  // Check if form exists and belongs to company
+  const form = await Form.findOne({
+    _id: formId,
+    companyId: req.company._id,
+    status: "active",
   });
 
-  // Step 4: Send webhook notification (async, don't wait for response)
+  if (!form) {
+    throw new ApiError(404, "Form not found or inactive");
+  }
+
+  // Validate form data based on form configuration
+  const validationErrors = validateFormData(formData, form.config.fields);
+  if (validationErrors.length > 0) {
+    throw new ApiError(400, "Form validation failed", validationErrors);
+  }
+
+  // Check if lead with same platform URL already exists for this company
+  const platformUrl = formData[form.config.fields[0].name];
+  const existingLead = await Lead.findOne({
+    platformUrl,
+    companyId: req.company._id,
+  });
+
+  if (existingLead) {
+    // Update existing lead with new form data
+    existingLead.platformData = { ...existingLead.platformData, ...formData };
+    existingLead.sourceUrl = sourceUrl;
+    existingLead.referrer = referrer;
+    existingLead.utmParams = utmParams;
+    await existingLead.save();
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, existingLead, "Lead updated successfully"));
+  }
+
+  // Determine platform and scrape data
+  let scrapedData = {};
+  let platform = form.formType;
+
+  try {
+    if (form.platformConfig.scrapingEnabled) {
+      // Validate platform identifier
+      scrapingService.validatePlatformIdentifier(form.formType, platformUrl);
+
+      // Scrape data using the scraping service
+      scrapedData = await scrapingService.scrapeProfile(
+        form.formType,
+        platformUrl
+      );
+    }
+  } catch (error) {
+    console.error(`Scraping failed for ${form.formType}:`, error);
+    // Continue with basic lead creation even if scraping fails
+  }
+
+  // Extract basic information from scraped data
+  const extractedData = scrapingService.extractLeadData(
+    scrapedData,
+    form.formType
+  );
+
+  // Create new lead
+  const lead = await Lead.create({
+    companyId: req.company._id,
+    formId: formId,
+    platform: platform,
+    platformUrl: platformUrl,
+    profileUrl: platformUrl, // Works for all platforms (LinkedIn, Meta, Twitter, Instagram, etc.)
+    profilePic: extractedData.profilePic || scrapedData.profilePicUrl || null,
+    firstName: extractedData.firstName,
+    lastName: extractedData.lastName,
+    fullName: extractedData.fullName,
+    email: extractedData.email,
+    phone: extractedData.phone,
+    company: extractedData.company,
+    companyIndustry: extractedData.companyIndustry,
+    companyWebsite: extractedData.companyWebsite,
+    companySize: extractedData.companySize,
+    jobTitle: extractedData.jobTitle,
+    department: extractedData.department,
+    location: extractedData.location,
+    country: extractedData.country,
+    city: extractedData.city,
+    platformData: scrapedData,
+    source: "form",
+    sourceUrl: sourceUrl,
+    referrer: referrer,
+    utmParams: utmParams,
+    status: "new",
+    emailStatus: {
+      followUpScheduledAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
+    },
+  });
+
+  // Increment company's lead count
+  await req.company.incrementLeadCount();
+
+  // Increment form's submission count
+  await form.incrementSubmissions();
+
+  // Send welcome email if enabled
+  if (form.settings.autoResponse.enabled) {
+    try {
+      await emailService.sendWelcomeEmail(lead, form);
+      await lead.updateEmailStatus("welcome", true);
+    } catch (error) {
+      console.error("Failed to send welcome email:", error);
+    }
+  }
+
+  // Send webhook notification (async, don't wait for response)
   webhookService
     .sendLeadToWebhook(lead)
     .then((result) => {
@@ -222,89 +158,93 @@ const createLead = asyncHandler(async (req, res) => {
       );
     });
 
-  // Step 5: Return final results
   return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        lead,
-        "Your LinkedIn profile has been scraped and saved successfully"
-      )
-    );
+    .status(201)
+    .json(new ApiResponse(201, lead, "Lead created successfully"));
 });
 
-// Get all leads with pagination, filtering, and sorting
+// Get all leads for a company
 const getLeads = asyncHandler(async (req, res) => {
   const {
-    page = 0,
+    page = 1,
     limit = 10,
     status,
+    formId,
+    platform,
     companyIndustry,
     companySize,
-    assignedTo,
+    source,
     sortBy = "createdAt",
     sortOrder = "desc",
   } = req.query;
 
-  // Build match conditions
-  const matchConditions = {};
+  // Build match conditions - always filter by company
+  const matchConditions = { companyId: req.company._id };
 
   if (status) matchConditions.status = status;
+  if (formId)
+    matchConditions.formId =
+      mongoose.Types.ObjectId.createFromHexString(formId);
+  if (platform) matchConditions.platform = platform;
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (companySize) matchConditions.companySize = companySize;
-  if (assignedTo)
-    matchConditions.assignedTo =
-      mongoose.Types.ObjectId.createFromHexString(assignedTo);
+  if (source) matchConditions.source = source;
 
   // Build sort object
   const sortObj = {};
   sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-  // Create aggregation pipeline
+  const options = {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    sort: sortObj,
+  };
+
   const pipeline = [
     { $match: matchConditions },
     {
       $lookup: {
-        from: "users",
-        localField: "assignedTo",
+        from: "forms",
+        localField: "formId",
         foreignField: "_id",
-        as: "assignedUser",
-        pipeline: [{ $project: { fullName: 1, email: 1, avatar: 1 } }],
+        as: "form",
+        pipeline: [{ $project: { name: 1, status: 1, formType: 1 } }],
       },
     },
     {
       $addFields: {
-        assignedUser: { $arrayElemAt: ["$assignedUser", 0] },
+        form: { $arrayElemAt: ["$form", 0] },
+        // For backward compatibility: use platformUrl if profileUrl doesn't exist
+        profileUrl: {
+          $ifNull: ["$profileUrl", "$platformUrl"],
+        },
       },
     },
     { $sort: sortObj },
   ];
 
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    customLabels: {
-      totalDocs: "totalLeads",
-      docs: "leads",
-    },
+  const result = await Lead.aggregatePaginate(
+    Lead.aggregate(pipeline),
+    options
+  );
+
+  // Transform the response to match frontend expectations (docs -> leads)
+  const response = {
+    leads: result.docs,
+    totalResults: result.totalDocs,
+    page: result.page,
+    totalPages: result.totalPages,
+    hasNextPage: result.hasNextPage,
+    hasPrevPage: result.hasPrevPage,
+    limit: result.limit,
   };
 
-  try {
-    const result = await Lead.aggregatePaginate(
-      Lead.aggregate(pipeline),
-      options
-    );
-
-    return res
-      .status(200)
-      .json(new ApiResponse(200, result, "Leads fetched successfully"));
-  } catch (error) {
-    throw new ApiError(500, "Error fetching leads");
-  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, response, "Leads fetched successfully"));
 });
 
-// Get a single lead by ID
+// Get lead by ID
 const getLeadById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -313,77 +253,106 @@ const getLeadById = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findById(id).populate(
-      "assignedTo",
-      "fullName email avatar"
-    );
+    const lead = await Lead.findOne({
+      _id: id,
+      companyId: req.company._id,
+    }).populate("formId", "name status formType");
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
     }
 
+    // For backward compatibility: use platformUrl if profileUrl doesn't exist
+    const leadData = lead.toObject();
+    if (!leadData.profileUrl && leadData.platformUrl) {
+      leadData.profileUrl = leadData.platformUrl;
+    }
+
     return res
       .status(200)
-      .json(new ApiResponse(200, lead, "Lead fetched successfully"));
+      .json(new ApiResponse(200, leadData, "Lead fetched successfully"));
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, "Error fetching lead");
+    throw new ApiError(500, error.message || "Failed to fetch lead");
   }
 });
 
 // Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
-  const { lead_id, BANT, Score, Category } = req.body;
+  const { id } = req.params;
+  const { status, notes, tags, leadScore, qualificationScore, bant } = req.body;
 
-  if (!lead_id) {
-    throw new ApiError(400, "id is required to update lead");
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new ApiError(400, "Invalid lead ID");
   }
 
   try {
     // Map request body to lead schema fields
-    const updateFields = {
-      "bant.budget.value": BANT?.Budget,
-      "bant.authority.value": BANT?.Authority,
-      "bant.authority.isDecisionMaker": BANT?.Authority?.toLowerCase().includes(
-        "decision maker: yes"
-      ),
-      "bant.need.value": BANT?.Need,
-      "bant.timeline.value": BANT?.Timeline,
-      leadScore: Score,
-      status: Category.toLowerCase(),
-    };
+    const updateFields = {};
 
-    // Remove undefined fields so they don’t overwrite existing values
-    Object.keys(updateFields).forEach(
-      (key) => updateFields[key] === undefined && delete updateFields[key]
-    );
+    if (status) updateFields.status = status;
+    if (notes !== undefined) updateFields.notes = notes;
+    if (tags) updateFields.tags = tags;
+    if (leadScore !== undefined) updateFields.leadScore = leadScore;
+    if (qualificationScore !== undefined)
+      updateFields.qualificationScore = qualificationScore;
+    if (bant) {
+      updateFields.bant = {
+        ...updateFields.bant,
+        ...bant,
+      };
+    }
 
     const updatedLead = await Lead.findOneAndUpdate(
-      { _id: lead_id },
+      { _id: id, companyId: req.company._id },
       { $set: updateFields },
       { new: true }
     );
 
     if (!updatedLead) {
-      throw new ApiError(404, `Lead with id "${lead_id}" not found`);
+      throw new ApiError(404, "Lead not found");
     }
+
+    // Send webhook notification for lead update (async, don't wait for response)
+    webhookService
+      .sendLeadToWebhook(updatedLead)
+      .then((result) => {
+        if (result.success) {
+          console.log(
+            `[Webhook] Lead update ${updatedLead._id} successfully sent to Make.com`
+          );
+        } else {
+          console.error(
+            `[Webhook] Failed to send lead update ${updatedLead._id} to Make.com:`,
+            result.error
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          `[Webhook] Unexpected error sending lead update ${updatedLead._id} to Make.com:`,
+          error
+        );
+      });
 
     return res
       .status(200)
       .json(new ApiResponse(200, updatedLead, "Lead updated successfully"));
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError(500, error.message || "Failed to update lead");
   }
 });
 
-// Search leads by text query
+// Search leads
 const searchLeads = asyncHandler(async (req, res) => {
   const {
     query,
     page = 1,
     limit = 10,
     status,
-    industry,
+    platform,
+    companyIndustry,
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
@@ -393,65 +362,75 @@ const searchLeads = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Search query is required");
   }
 
-  // Build match conditions
+  // Build match conditions - always filter by company
   const matchConditions = {
+    companyId: req.company._id,
     $text: { $search: query.trim() },
   };
 
   if (status) matchConditions.status = status;
+  if (platform) matchConditions.platform = platform;
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
+  if (source) matchConditions.source = source;
 
   // Build sort object
-  const sortObj = { score: { $meta: "textScore" } };
-  if (sortBy !== "relevance") {
-    sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
-  }
-
-  // Create aggregation pipeline
-  const pipeline = [
-    { $match: matchConditions },
-    {
-      $lookup: {
-        from: "users",
-        localField: "assignedTo",
-        foreignField: "_id",
-        as: "assignedUser",
-        pipeline: [{ $project: { fullName: 1, email: 1, avatar: 1 } }],
-      },
-    },
-    {
-      $addFields: {
-        assignedUser: { $arrayElemAt: ["$assignedUser", 0] },
-        searchScore: { $meta: "textScore" },
-      },
-    },
-    { $sort: sortObj },
-  ];
+  const sortObj = {};
+  sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
   const options = {
     page: parseInt(page),
     limit: parseInt(limit),
-    customLabels: {
-      totalDocs: "totalResults",
-      docs: "leads",
-    },
+    sort: sortObj,
   };
 
-  try {
-    const result = await Lead.aggregatePaginate(
-      Lead.aggregate(pipeline),
-      options
-    );
+  const pipeline = [
+    { $match: matchConditions },
+    {
+      $lookup: {
+        from: "forms",
+        localField: "formId",
+        foreignField: "_id",
+        as: "form",
+        pipeline: [{ $project: { name: 1, status: 1, formType: 1 } }],
+      },
+    },
+    {
+      $addFields: {
+        form: { $arrayElemAt: ["$form", 0] },
+        searchScore: { $meta: "textScore" },
+        // For backward compatibility: use platformUrl if profileUrl doesn't exist
+        profileUrl: {
+          $ifNull: ["$profileUrl", "$platformUrl"],
+        },
+      },
+    },
+    { $sort: { searchScore: { $meta: "textScore" } } },
+  ];
 
-    return res
-      .status(200)
-      .json(new ApiResponse(200, result, `Search results for "${query}"`));
-  } catch (error) {
-    throw new ApiError(500, "Error searching leads");
-  }
+  const result = await Lead.aggregatePaginate(
+    Lead.aggregate(pipeline),
+    options
+  );
+
+  // Transform the response to match frontend expectations (docs -> leads)
+  const response = {
+    leads: result.docs,
+    totalResults: result.totalDocs,
+    page: result.page,
+    totalPages: result.totalPages,
+    hasNextPage: result.hasNextPage,
+    hasPrevPage: result.hasPrevPage,
+    limit: result.limit,
+  };
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, response, "Search results fetched successfully")
+    );
 });
 
-// Update lead status and notes
+// Update lead status
 const updateLeadStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status, notes } = req.body;
@@ -460,18 +439,19 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid lead ID");
   }
 
-  if (!status) {
-    throw new ApiError(400, "Status is required");
-  }
-
   try {
-    const lead = await Lead.findById(id);
+    const lead = await Lead.findOne({
+      _id: id,
+      companyId: req.company._id,
+    });
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
     }
 
-    await lead.updateStatus(status, notes);
+    lead.status = status;
+    if (notes !== undefined) lead.notes = notes;
+    await lead.save();
 
     // Send webhook notification for lead update (async, don't wait for response)
     webhookService
@@ -479,18 +459,18 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
       .then((result) => {
         if (result.success) {
           console.log(
-            `[Webhook] Lead update ${lead._id} successfully sent to Make.com`
+            `[Webhook] Lead status update ${lead._id} successfully sent to Make.com`
           );
         } else {
           console.error(
-            `[Webhook] Failed to send lead update ${lead._id} to Make.com:`,
+            `[Webhook] Failed to send lead status update ${lead._id} to Make.com:`,
             result.error
           );
         }
       })
       .catch((error) => {
         console.error(
-          `[Webhook] Unexpected error sending lead update ${lead._id} to Make.com:`,
+          `[Webhook] Unexpected error sending lead status update ${lead._id} to Make.com:`,
           error
         );
       });
@@ -500,22 +480,31 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
       .json(new ApiResponse(200, lead, "Lead status updated successfully"));
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, "Error updating lead status");
+    throw new ApiError(500, error.message || "Failed to update lead status");
   }
 });
 
 // Get lead statistics
 const getLeadStats = asyncHandler(async (req, res) => {
   try {
+    const companyId = req.company._id;
+
     const stats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: { companyId, status: { $ne: null } } },
       {
         $group: {
           _id: null,
           totalLeads: { $sum: 1 },
-          coldLeads: { $sum: { $cond: [{ $eq: ["$status", "cold"] }, 1, 0] } },
-          warmLeads: { $sum: { $cond: [{ $eq: ["$status", "warm"] }, 1, 0] } },
-          hotLeads: { $sum: { $cond: [{ $eq: ["$status", "hot"] }, 1, 0] } },
+          newLeads: { $sum: { $cond: [{ $eq: ["$status", "new"] }, 1, 0] } },
+          hotLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "hot"] }, 1, 0] },
+          },
+          warmLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "warm"] }, 1, 0] },
+          },
+          coldLeads: {
+            $sum: { $cond: [{ $eq: ["$status", "cold"] }, 1, 0] },
+          },
           qualifiedLeads: {
             $sum: { $cond: [{ $eq: ["$status", "qualified"] }, 1, 0] },
           },
@@ -526,9 +515,10 @@ const getLeadStats = asyncHandler(async (req, res) => {
         $project: {
           _id: 0,
           totalLeads: 1,
-          coldLeads: 1,
-          warmLeads: 1,
+          newLeads: 1,
           hotLeads: 1,
+          warmLeads: 1,
+          coldLeads: 1,
           qualifiedLeads: 1,
           avgLeadScore: { $round: ["$avgLeadScore", 2] },
         },
@@ -536,15 +526,44 @@ const getLeadStats = asyncHandler(async (req, res) => {
     ]);
 
     const industryStats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: { companyId, status: { $ne: null } } },
       { $group: { _id: "$companyIndustry", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
+    const platformStats = await Lead.aggregate([
+      { $match: { companyId, status: { $ne: null } } },
+      { $group: { _id: "$platform", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+
     const locationStats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: { companyId, status: { $ne: null } } },
       { $group: { _id: "$location", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 },
+    ]);
+
+    const formStats = await Lead.aggregate([
+      { $match: { companyId, status: { $ne: null } } },
+      {
+        $lookup: {
+          from: "forms",
+          localField: "formId",
+          foreignField: "_id",
+          as: "form",
+        },
+      },
+      { $unwind: "$form" },
+      {
+        $group: {
+          _id: "$form.name",
+          count: { $sum: 1 },
+          formType: { $first: "$form.formType" },
+        },
+      },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
@@ -552,14 +571,17 @@ const getLeadStats = asyncHandler(async (req, res) => {
     const result = {
       overview: stats[0] || {
         totalLeads: 0,
-        coldLeads: 0,
-        warmLeads: 0,
+        newLeads: 0,
         hotLeads: 0,
+        warmLeads: 0,
+        coldLeads: 0,
         qualifiedLeads: 0,
         avgLeadScore: 0,
       },
       industryBreakdown: industryStats,
+      platformBreakdown: platformStats,
       locationBreakdown: locationStats,
+      formBreakdown: formStats,
     };
 
     return res
@@ -568,11 +590,11 @@ const getLeadStats = asyncHandler(async (req, res) => {
         new ApiResponse(200, result, "Lead statistics fetched successfully")
       );
   } catch (error) {
-    throw new ApiError(500, "Error fetching lead statistics");
+    throw new ApiError(500, error.message || "Failed to fetch lead statistics");
   }
 });
 
-// Delete a lead (soft delete)
+// Delete a lead
 const deleteLead = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -581,7 +603,10 @@ const deleteLead = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findByIdAndDelete(id);
+    const lead = await Lead.findOneAndDelete({
+      _id: id,
+      companyId: req.company._id,
+    });
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -592,9 +617,51 @@ const deleteLead = asyncHandler(async (req, res) => {
       .json(new ApiResponse(200, null, "Lead deleted successfully"));
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, "Error deleting lead");
+    throw new ApiError(500, error.message || "Failed to delete lead");
   }
 });
+
+// ==============================================================
+// Helper Functions
+// ==============================================================
+
+const validateFormData = (formData, fields) => {
+  const errors = [];
+
+  fields.forEach((field) => {
+    const value = formData[field.name];
+
+    if (field.required && (!value || value.trim() === "")) {
+      errors.push(`${field.label || field.name} is required`);
+    }
+
+    if (value && field.type === "email") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        errors.push(`${field.label || field.name} must be a valid email`);
+      }
+    }
+
+    if (value && field.type === "url") {
+      const urlRegex = /^https?:\/\/.+/;
+      if (!urlRegex.test(value)) {
+        errors.push(`${field.label || field.name} must be a valid URL`);
+      }
+    }
+
+    if (value && field.validation && field.validation.pattern) {
+      const regex = new RegExp(field.validation.pattern);
+      if (!regex.test(value)) {
+        errors.push(
+          field.validation.message ||
+            `${field.label || field.name} format is invalid`
+        );
+      }
+    }
+  });
+
+  return errors;
+};
 
 export {
   createLead,

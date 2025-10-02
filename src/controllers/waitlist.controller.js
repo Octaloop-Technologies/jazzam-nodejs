@@ -3,7 +3,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { Waitlist } from "../models/waitlist.model.js";
 import { Validator } from "../utils/validator.js";
-import { emailService } from "../services/email.service.js";
+import emailService from "../services/email.service.js";
 
 // Join waitlist
 const joinWaitlist = asyncHandler(async (req, res) => {
