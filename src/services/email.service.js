@@ -552,6 +552,7 @@ class EmailService {
   #generateLeadNotificationTemplate(lead, form, company) {
     const leadName = lead.fullName || lead.firstName || "Unknown";
     const formName = form.name || "Contact Form";
+    const companyName = company.companyName || "Your Company";
 
     return `
       <!DOCTYPE html>
@@ -573,6 +574,7 @@ class EmailService {
           <h1>🎉 New Lead Received!</h1>
         </div>
         <div class="content">
+          <p>Hi <strong>${companyName}</strong>,</p>
           <p>You have received a new lead from your form: <strong>${formName}</strong></p>
           
           <div class="lead-info">
@@ -588,7 +590,7 @@ class EmailService {
           <p>Please follow up with this lead as soon as possible to maximize your conversion chances.</p>
         </div>
         <div class="footer">
-          <p>This notification was sent to ${company.email}</p>
+          <p>This notification was sent to <strong>${companyName}</strong> (${company.email})</p>
         </div>
       </body>
       </html>

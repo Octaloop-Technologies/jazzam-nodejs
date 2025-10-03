@@ -142,6 +142,13 @@ const createLead = asyncHandler(async (req, res) => {
     }
   }
 
+  // Send lead notification email to company
+  try {
+    await emailService.sendLeadNotificationEmail(lead, form, req.company);
+  } catch (error) {
+    console.error("Failed to send lead notification email to company:", error);
+  }
+
   // Send webhook notification (async, don't wait for response)
   webhookService
     .sendLeadToWebhook(lead)
