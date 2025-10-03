@@ -4,6 +4,7 @@ import { Lead } from "../models/lead.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import scrapingService from "../services/scraping.service.js";
+import emailService from "../services/email.service.js";
 
 // ==============================================================
 // Form Management Functions
@@ -343,7 +344,7 @@ const submitFormData = asyncHandler(async (req, res) => {
   const { accessToken } = req.params;
   const formData = req.body;
 
-  const form = await Form.findOne({ accessToken });
+  const form = await Form.findOne({ accessToken }).populate("companyId");
 
   if (!form) {
     throw new ApiError(404, "Form not found");
@@ -365,19 +366,23 @@ const submitFormData = asyncHandler(async (req, res) => {
   // Only attempt scraping if it's enabled and form type is not 'custom'
   if (form.platformConfig?.scrapingEnabled && form.formType !== "custom") {
     try {
+      // Extract platform URL from form data
+      const platformUrl = formData[form.config.fields[0].name];
+
       const scrapedData = await scrapingService.scrapeProfile(
         form.formType,
-        formData[form.config.fields[0].name]
+        platformUrl
       );
-
-      console.log("Scraped Data:", JSON.stringify(scrapedData, null, 2));
 
       // Create lead record from scraped data
       const leadData = {
         companyId: form.companyId,
         formId: form._id,
         platform: form.formType,
-        platformUrl: formData[form.config.fields[0].name],
+        platformUrl: platformUrl,
+        profileUrl: platformUrl,
+        profilePic:
+          scrapedData.profilePic || scrapedData.profilePicHighQuality || null,
         firstName: scrapedData.firstName || null,
         lastName: scrapedData.lastName || null,
         fullName: scrapedData.fullName || null,
@@ -402,6 +407,45 @@ const submitFormData = asyncHandler(async (req, res) => {
       };
 
       const lead = await Lead.create(leadData);
+
+      console.log("📧 Email Configuration Check:");
+      console.log(`  - Lead Email: ${lead.email || "Not available"}`);
+      console.log(`  - Company Email: ${form.companyId.email}`);
+      console.log(
+        `  - Auto Response Enabled: ${form.settings.autoResponse.enabled}`
+      );
+
+      // Send welcome email to lead if enabled and lead has email
+      if (form.settings.autoResponse.enabled && lead.email) {
+        try {
+          await emailService.sendWelcomeEmail(lead, form);
+          await lead.updateEmailStatus("welcome", true);
+          console.log(`✅ Welcome email sent to lead: ${lead.email}`);
+        } catch (error) {
+          console.error("Failed to send welcome email to lead:", error);
+        }
+      } else if (form.settings.autoResponse.enabled && !lead.email) {
+        console.log(
+          "⚠️ Welcome email not sent - lead email not available from scraped data"
+        );
+      }
+
+      // Send lead notification email to company
+      try {
+        await emailService.sendLeadNotificationEmail(
+          lead,
+          form,
+          form.companyId
+        );
+        console.log(
+          `✅ Lead notification email sent to company: ${form.companyId.email}`
+        );
+      } catch (error) {
+        console.error(
+          "Failed to send lead notification email to company:",
+          error
+        );
+      }
     } catch (scrapingError) {
       console.error("Scraping Error Details:", scrapingError);
     }

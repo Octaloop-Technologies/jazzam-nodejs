@@ -13,9 +13,10 @@ import {
 class EmailService {
   #transporter = null;
   #isInitialized = false;
+  #initializationPromise = null;
 
   constructor() {
-    this.#initializeTransporter();
+    // Don't initialize in constructor - wait until first use
   }
 
   // ================================================
@@ -23,45 +24,59 @@ class EmailService {
   // ================================================
 
   async #initializeTransporter() {
-    try {
-      // Check if email configuration is available
-      if (!process.env.EMAIL_COMPANY || !process.env.EMAIL_APP_PASSWORD) {
+    // Prevent multiple simultaneous initializations
+    if (this.#initializationPromise) {
+      return this.#initializationPromise;
+    }
+
+    // If already initialized, return immediately
+    if (this.#isInitialized) {
+      return;
+    }
+
+    this.#initializationPromise = (async () => {
+      try {
+        // Check if email configuration is available
+        if (!process.env.EMAIL_COMPANY || !process.env.EMAIL_APP_PASSWORD) {
+          console.warn(
+            "⚠️ Email configuration not found. Email service will be disabled."
+          );
+          this.#isInitialized = false;
+          return;
+        }
+
+        // Validate required environment variables
+        this.#validateConfiguration();
+
+        // Create transporter with secure configuration
+        this.#transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.EMAIL_COMPANY,
+            pass: process.env.EMAIL_APP_PASSWORD,
+          },
+          pool: true, // Use connection pooling for better performance
+          maxConnections: 5,
+          maxMessages: 100,
+          secure: true, // Use TLS
+        });
+
+        // Verify transporter configuration asynchronously
+        await this.#verifyConnection();
+        this.#isInitialized = true;
+
+        console.log("✅ Email service initialized successfully");
+      } catch (error) {
+        console.warn("⚠️ Email service initialization failed:", error.message);
         console.warn(
-          "⚠️ Email configuration not found. Email service will be disabled."
+          "⚠️ Email notifications will be disabled. Waitlist entries will still be saved."
         );
         this.#isInitialized = false;
-        return;
+        // Don't throw error, just disable email service
       }
+    })();
 
-      // Validate required environment variables
-      this.#validateConfiguration();
-
-      // Create transporter with secure configuration
-      this.#transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_COMPANY,
-          pass: process.env.EMAIL_APP_PASSWORD,
-        },
-        pool: true, // Use connection pooling for better performance
-        maxConnections: 5,
-        maxMessages: 100,
-        secure: true, // Use TLS
-      });
-
-      // Verify transporter configuration asynchronously
-      await this.#verifyConnection();
-      this.#isInitialized = true;
-
-      console.log("✅ Email service initialized successfully");
-    } catch (error) {
-      console.warn("⚠️ Email service initialization failed:", error.message);
-      console.warn(
-        "⚠️ Email notifications will be disabled. Waitlist entries will still be saved."
-      );
-      this.#isInitialized = false;
-      // Don't throw error, just disable email service
-    }
+    return this.#initializationPromise;
   }
 
   // ================================================
@@ -114,6 +129,9 @@ class EmailService {
 
   async sendWaitlistNotification(userEmail, additionalData = {}) {
     try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
       if (!this.#isInitialized) {
         console.warn(
           "⚠️ Email service not initialized. Skipping notification email."
@@ -161,6 +179,9 @@ class EmailService {
 
   async sendWaitlistConfirmation(userEmail, userName = null) {
     try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
       if (!this.#isInitialized) {
         console.warn(
           "⚠️ Email service not initialized. Skipping confirmation email."
@@ -208,6 +229,9 @@ class EmailService {
 
   async sendWelcomeEmail(lead, form) {
     try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
       if (!this.#isInitialized) {
         console.warn(
           "⚠️ Email service not initialized. Skipping welcome email."
@@ -252,6 +276,9 @@ class EmailService {
 
   async sendFollowUpEmail(lead, form) {
     try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
       if (!this.#isInitialized) {
         console.warn(
           "⚠️ Email service not initialized. Skipping follow-up email."
@@ -296,6 +323,9 @@ class EmailService {
 
   async sendLeadNotificationEmail(lead, form, company) {
     try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
       if (!this.#isInitialized) {
         console.warn(
           "⚠️ Email service not initialized. Skipping lead notification email."

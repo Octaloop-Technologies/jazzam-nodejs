@@ -89,6 +89,8 @@ const createLead = asyncHandler(async (req, res) => {
     form.formType
   );
 
+  console.log("Extracted Data  .............");
+
   // Create new lead
   const lead = await Lead.create({
     companyId: req.company._id,
@@ -132,19 +134,35 @@ const createLead = asyncHandler(async (req, res) => {
   // Increment form's submission count
   await form.incrementSubmissions();
 
-  // Send welcome email if enabled
-  if (form.settings.autoResponse.enabled) {
+  // Log lead details for debugging
+  console.log("📧 Email Configuration Check:");
+  console.log(`  - Lead Email: ${lead.email || "Not available"}`);
+  console.log(`  - Company Email: ${req.company.email}`);
+  console.log(
+    `  - Auto Response Enabled: ${form.settings.autoResponse.enabled}`
+  );
+
+  // Send welcome email to lead if enabled and lead has email
+  if (form.settings.autoResponse.enabled && lead.email) {
     try {
       await emailService.sendWelcomeEmail(lead, form);
       await lead.updateEmailStatus("welcome", true);
+      console.log(`✅ Welcome email sent to lead: ${lead.email}`);
     } catch (error) {
-      console.error("Failed to send welcome email:", error);
+      console.error("Failed to send welcome email to lead:", error);
     }
+  } else if (form.settings.autoResponse.enabled && !lead.email) {
+    console.log(
+      "⚠️ Welcome email not sent - lead email not available from scraped data"
+    );
   }
 
   // Send lead notification email to company
   try {
     await emailService.sendLeadNotificationEmail(lead, form, req.company);
+    console.log(
+      `✅ Lead notification email sent to company: ${req.company.email}`
+    );
   } catch (error) {
     console.error("Failed to send lead notification email to company:", error);
   }

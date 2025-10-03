@@ -134,8 +134,6 @@ class ScrapingService {
       return {};
     }
 
-    console.log("Scraped Data:", JSON.stringify(scrapedData, null, 2));
-
     switch (platform) {
       case "linkedin":
         return {
