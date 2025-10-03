@@ -95,8 +95,12 @@ const createLead = asyncHandler(async (req, res) => {
     formId: formId,
     platform: platform,
     platformUrl: platformUrl,
-    profileUrl: platformUrl, // Works for all platforms (LinkedIn, Meta, Twitter, Instagram, etc.)
-    profilePic: extractedData.profilePic || scrapedData.profilePicUrl || null,
+    profileUrl: platformUrl,
+    profilePic:
+      extractedData.profilePic ||
+      scrapedData.profilePic ||
+      scrapedData.profilePicHighQuality ||
+      null,
     firstName: extractedData.firstName,
     lastName: extractedData.lastName,
     fullName: extractedData.fullName,

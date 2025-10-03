@@ -141,8 +141,6 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl");
 
-  const existingTypes = existingForms.map((f) => f.formType);
-
   const platformsData = [
     {
       platform: "linkedin",
@@ -228,10 +226,6 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
       ],
     },
   ];
-
-  // Debug: Log the existing forms and platforms data
-  console.log("Existing forms:", JSON.stringify(existingForms, null, 2));
-  console.log("Platforms data:", JSON.stringify(platformsData, null, 2));
 
   return res
     .status(200)

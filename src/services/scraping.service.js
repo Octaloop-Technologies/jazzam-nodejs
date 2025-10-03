@@ -134,6 +134,8 @@ class ScrapingService {
       return {};
     }
 
+    console.log("Scraped Data:", JSON.stringify(scrapedData, null, 2));
+
     switch (platform) {
       case "linkedin":
         return {
@@ -154,6 +156,11 @@ class ScrapingService {
             null,
           country: scrapedData.addressCountryOnly || null,
           city: scrapedData.addressWithoutCountry || null,
+          profilePic:
+            scrapedData.profilePic ||
+            scrapedData.imgUrl ||
+            scrapedData.photoUrl ||
+            null,
         };
 
       case "meta":
@@ -172,6 +179,11 @@ class ScrapingService {
           location: scrapedData.location || null,
           country: scrapedData.country || null,
           city: scrapedData.city || null,
+          profilePic:
+            scrapedData.profilePicUrl ||
+            scrapedData.imgUrl ||
+            scrapedData.photoUrl ||
+            null,
         };
 
       case "twitter":
@@ -190,6 +202,11 @@ class ScrapingService {
           location: scrapedData.location || null,
           country: scrapedData.country || null,
           city: scrapedData.city || null,
+          profilePic:
+            scrapedData.profilePicUrl ||
+            scrapedData.imgUrl ||
+            scrapedData.photoUrl ||
+            null,
         };
 
       case "instagram":
@@ -208,6 +225,11 @@ class ScrapingService {
           location: scrapedData.location || null,
           country: scrapedData.country || null,
           city: scrapedData.city || null,
+          profilePic:
+            scrapedData.profilePicUrl ||
+            scrapedData.imgUrl ||
+            scrapedData.photoUrl ||
+            null,
         };
 
       default:
