@@ -40,9 +40,20 @@ const handleSuccessfulOAuth = async (
     // Create cookie options
     const cookieOptions = createAuthCookieOptions();
 
+    // Decide post-login redirect based on subscription status
+    // User has selected a plan if subscriptionStartDate is set
+    // This indicates they've gone through plan selection, not just defaults
+    const hasSelectedPlan = !!company.subscriptionStartDate;
+
+    const needsPlanSelection = !hasSelectedPlan;
+
+    const redirectPath = needsPlanSelection
+      ? "/super-user/subscription"
+      : "/super-user";
+
     // Generate redirect URL with provider info
     const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
-      path: "/super-user",
+      path: redirectPath,
     });
 
     // Send HTML redirect with cookies
@@ -140,10 +151,30 @@ const registerCompany = asyncHandler(async (req, res) => {
     );
   }
 
+  // Generate tokens for immediate login after registration
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    company._id
+  );
+
+  // New companies always need plan selection (they're on trial by default)
+  const needsPlanSelection = true;
+
+  // Set cookies and return response
   return res
     .status(201)
+    .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+    .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
     .json(
-      new ApiResponse(201, createdCompany, "Company Registered Successfully")
+      new ApiResponse(
+        201,
+        {
+          company: createdCompany,
+          accessToken,
+          refreshToken,
+          needsPlanSelection,
+        },
+        "Company Registered Successfully"
+      )
     );
 });
 
@@ -193,6 +224,12 @@ const loginCompany = asyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
+  // Check if needs plan selection
+  // User has selected a plan if subscriptionStartDate is set
+  const hasSelectedPlan = !!company.subscriptionStartDate;
+
+  const needsPlanSelection = !hasSelectedPlan;
+
   // Set access and refresh token in cookie
   return res
     .status(200)
@@ -201,7 +238,12 @@ const loginCompany = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         200,
-        { company: loggedInCompany, accessToken, refreshToken },
+        {
+          company: loggedInCompany,
+          accessToken,
+          refreshToken,
+          needsPlanSelection,
+        },
         "Company Logged In Successfully"
       )
     );
@@ -587,24 +629,42 @@ const updateCompanyLogo = asyncHandler(async (req, res) => {
 });
 
 const updateSubscriptionStatus = asyncHandler(async (req, res) => {
-  const { subscriptionStatus, subscriptionPlan, subscriptionEndDate } =
-    req.body;
+  const {
+    subscriptionStatus,
+    subscriptionPlan,
+    subscriptionEndDate,
+    subscriptionStartDate,
+    trialEndDate,
+    paymentMethod,
+    paymentDetails,
+  } = req.body;
+
+  const update = {
+    subscriptionStatus,
+    subscriptionPlan,
+    subscriptionEndDate: subscriptionEndDate
+      ? new Date(subscriptionEndDate)
+      : null,
+  };
+
+  if (trialEndDate) {
+    update.trialEndDate = new Date(trialEndDate);
+  }
+  if (subscriptionStartDate) {
+    update.subscriptionStartDate = new Date(subscriptionStartDate);
+  } else if (subscriptionStatus === "active" && !update.subscriptionStartDate) {
+    update.subscriptionStartDate = new Date();
+  }
+  if (paymentMethod) {
+    update.paymentMethod = paymentMethod;
+  }
+  if (paymentDetails && typeof paymentDetails === "object") {
+    update.paymentDetails = { ...paymentDetails };
+  }
 
   const company = await Company.findByIdAndUpdate(
     req.company._id,
-    {
-      $set: {
-        subscriptionStatus,
-        subscriptionPlan,
-        subscriptionEndDate: subscriptionEndDate
-          ? new Date(subscriptionEndDate)
-          : null,
-        subscriptionStartDate:
-          subscriptionStatus === "active"
-            ? new Date()
-            : company.subscriptionStartDate,
-      },
-    },
+    { $set: update },
     { new: true }
   ).select("-password");
 

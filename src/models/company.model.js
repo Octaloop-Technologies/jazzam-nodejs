@@ -59,12 +59,11 @@ const companySchema = new Schema(
     },
     subscriptionPlan: {
       type: String,
-      enum: ["free", "basic", "premium", "enterprise"],
+      enum: ["free", "starter", "growth", "pro"],
       default: "free",
     },
     trialEndDate: {
       type: Date,
-      default: () => new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
     },
     subscriptionStartDate: {
       type: Date,
@@ -76,14 +75,22 @@ const companySchema = new Schema(
     // Payment Information
     paymentMethod: {
       type: String,
-      enum: ["none", "stripe", "paypal", "bank_transfer"],
+      enum: ["none", "stripe", "payfort", "paypal", "bank_transfer"],
       default: "none",
     },
     paymentDetails: {
+      // Stripe fields
       stripeCustomerId: String,
       stripeSubscriptionId: String,
+      // PayFort fields
+      payfortMerchantReference: String,
+      payfortFortId: String,
+      payfortTokenName: String,
+      // Common fields
       lastPaymentDate: Date,
       nextPaymentDate: Date,
+      lastPaymentAmount: Number,
+      paymentCurrency: String,
     },
 
     // Company Settings

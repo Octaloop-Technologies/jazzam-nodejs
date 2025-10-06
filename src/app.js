@@ -39,6 +39,18 @@ app.use(helmet()); // Security headers first
 app.use(securityHeaders); // Custom security headers
 app.use(cors(corsOptions)); // CORS configuration
 app.use(generalRateLimit); // General rate limiting
+
+// Raw body for Stripe webhooks (before JSON parsing)
+app.use(
+  "/api/v1/billing/webhook/stripe",
+  express.raw({ type: "application/json" }),
+  (req, res, next) => {
+    req.rawBody = req.body.toString();
+    next();
+  }
+);
+
+// Regular JSON and URL-encoded parsing for other routes
 app.use(express.json({ limit: securityConfig.bodyParser.jsonLimit }));
 app.use(
   express.urlencoded({
@@ -129,6 +141,7 @@ import leadRouter from "./routes/lead.routes.js";
 import crmIntegrationRouter from "./routes/crmIntegration.routes.js";
 import waitlistRouter from "./routes/waitlist.routes.js";
 import webhookRouter from "./routes/webhook.routes.js";
+import subscriptionRouter from "./routes/subscription.routes.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -144,6 +157,7 @@ app.use("/api/v1/leads", leadRouter);
 app.use("/api/v1/crm-integration", crmIntegrationRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
 app.use("/api/v1/webhook", webhookRouter);
+app.use("/api/v1/billing", subscriptionRouter);
 
 // ==========================================================
 // Error handling middleware (must be last)
