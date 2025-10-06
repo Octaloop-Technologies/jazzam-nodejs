@@ -158,25 +158,53 @@ const leadSchema = new Schema(
     bant: {
       budget: {
         value: String,
-        score: { type: Number, min: 0, max: 10 },
+        score: { type: Number, min: 0, max: 25 },
+        qualified: Boolean,
       },
       authority: {
         value: String,
-        score: { type: Number, min: 0, max: 10 },
+        score: { type: Number, min: 0, max: 25 },
         isDecisionMaker: { type: Boolean, default: false },
+        level: { type: String, enum: ["high", "medium", "low"] },
       },
       need: {
-        value: String,
-        score: { type: Number, min: 0, max: 10 },
+        value: [String],
+        score: { type: Number, min: 0, max: 25 },
         urgency: { type: String, enum: ["low", "medium", "high"] },
       },
       timeline: {
         value: String,
-        score: { type: Number, min: 0, max: 10 },
+        score: { type: Number, min: 0, max: 25 },
         timeframe: {
           type: String,
-          enum: ["immediate", "1-3 months", "3-6 months", "6+ months"],
+          enum: [
+            "immediate",
+            "1-3 months",
+            "3-6 months",
+            "6+ months",
+            "unknown",
+          ],
         },
+      },
+      // Overall BANT score (0-100)
+      totalScore: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0,
+      },
+      // Lead category based on score
+      category: {
+        type: String,
+        enum: ["hot", "warm", "cold", "unqualified"],
+      },
+      // When BANT qualification was last performed
+      qualifiedAt: {
+        type: Date,
+      },
+      // Raw AI response for reference
+      rawResponse: {
+        type: Schema.Types.Mixed,
       },
     },
 

@@ -5,6 +5,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import scrapingService from "../services/scraping.service.js";
 import emailService from "../services/email.service.js";
+import bantService from "../services/bant.service.js";
 
 // ==============================================================
 // Form Management Functions
@@ -340,6 +341,9 @@ const getFormByAccessToken = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, form, "Form fetched successfully"));
 });
 
+// ==============================================================
+// Form Submission Functions
+// ==============================================================
 const submitFormData = asyncHandler(async (req, res) => {
   const { accessToken } = req.params;
   const formData = req.body;
@@ -408,13 +412,6 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
-      console.log("📧 Email Configuration Check:");
-      console.log(`  - Lead Email: ${lead.email || "Not available"}`);
-      console.log(`  - Company Email: ${form.companyId.email}`);
-      console.log(
-        `  - Auto Response Enabled: ${form.settings.autoResponse.enabled}`
-      );
-
       // Send welcome email to lead if enabled and lead has email
       if (form.settings.autoResponse.enabled && lead.email) {
         try {
@@ -446,6 +443,9 @@ const submitFormData = asyncHandler(async (req, res) => {
           error
         );
       }
+
+      // Apply BANT qualification (async, non-blocking)
+      qualifyLeadInBackground(lead);
     } catch (scrapingError) {
       console.error("Scraping Error Details:", scrapingError);
     }
@@ -456,6 +456,36 @@ const submitFormData = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, { formData }, "Form submitted successfully"));
 });
+
+// Qualify lead using BANT method in background (non-blocking)
+const qualifyLeadInBackground = async (lead) => {
+  try {
+    console.log(
+      `[BANT] Starting background qualification for lead ${lead._id}`
+    );
+
+    // Call BANT service to qualify the lead
+    const qualificationResult = await bantService.qualifyLead(lead);
+
+    if (!qualificationResult.success) {
+      console.error(
+        `[BANT] Qualification failed for lead ${lead._id}:`,
+        qualificationResult.error
+      );
+      return;
+    }
+
+    // Update lead with BANT data using shared service method
+    const bantData = qualificationResult.data;
+    await bantService.updateLeadWithBANT(lead, bantData);
+
+    console.log(
+      `[BANT] Successfully qualified lead ${lead._id} - Score: ${bantData.score}, Category: ${bantData.category}`
+    );
+  } catch (error) {
+    console.error(`[BANT] Error qualifying lead ${lead._id}:`, error.message);
+  }
+};
 
 const addFormField = asyncHandler(async (req, res) => {
   const { formId } = req.params;

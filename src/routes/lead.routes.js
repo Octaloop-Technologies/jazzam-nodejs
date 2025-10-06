@@ -2,13 +2,14 @@ import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import {
   getLeads,
-  createLead,
   getLeadById,
   updateLeadById,
   searchLeads,
   updateLeadStatus,
   getLeadStats,
   deleteLead,
+  qualifyLeadBANT,
+  batchQualifyLeadsBANT,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -19,9 +20,6 @@ const router = Router();
 // Update lead bant object
 // PATCH /api/v1/lead/:id
 router.route("/").patch(updateLeadById);
-
-// POST /api/v1/lead/create
-router.route("/create").post(createLead);
 
 // ================================================
 // Protected routes - Require authentication
@@ -39,6 +37,19 @@ router.route("/search").get(searchLeads);
 // Get lead statistics and analytics
 // GET /api/v1/lead/stats
 router.route("/stats").get(getLeadStats);
+
+// ================================================
+// BANT Qualification Routes (only for manual qualification)
+// ================================================
+
+// Batch qualify multiple leads using BANT
+// POST /api/v1/lead/bant/batch
+// Body: { leadIds: [...], filters: {...} }
+router.route("/bant/batch").post(batchQualifyLeadsBANT);
+
+// Qualify a single lead using BANT
+// POST /api/v1/lead/:id/bant
+router.route("/:id/bant").post(qualifyLeadBANT);
 
 // Get single lead by ID
 // GET /api/v1/lead/:id
