@@ -697,6 +697,29 @@ const deleteCompany = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Company deleted successfully"));
 });
 
+// ==============================================================
+// Settings Management
+// ==============================================================
+
+const updateSettings = asyncHandler(async (req, res) => {
+  const { settings } = req.body;
+  const companyId = req.company._id;
+
+  const company = await Company.findByIdAndUpdate(
+    companyId,
+    { $set: { settings: { ...req.company.settings, ...settings } } },
+    { new: true, runValidators: true }
+  ).select("-password");
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, company, "Settings updated successfully"));
+});
+
 export {
   registerCompany,
   loginCompany,
@@ -712,5 +735,6 @@ export {
   updateOnboardingStatus,
   updateCompanyLogo,
   updateSubscriptionStatus,
+  updateSettings,
   deleteCompany,
 };

@@ -115,6 +115,10 @@ const companySchema = new Schema(
         type: Boolean,
         default: true,
       },
+      autoBANTQualification: {
+        type: Boolean,
+        default: false,
+      },
     },
 
     // Company Branding

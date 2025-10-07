@@ -378,6 +378,33 @@ const submitFormData = asyncHandler(async (req, res) => {
         platformUrl
       );
 
+      // Check if scraping returned valid data
+      if (!scrapedData) {
+        console.error("Scraping returned no data for:", platformUrl);
+        throw new Error("Failed to scrape profile data");
+      }
+
+      // Prevent duplicates: if a lead with the same platformUrl exists for this company, skip creation
+      const existingLead = await Lead.findOne({
+        companyId: form.companyId,
+        platformUrl: platformUrl,
+      });
+
+      if (existingLead) {
+        console.log(
+          `ℹ️ Duplicate lead skipped for company ${form.companyId} and URL ${platformUrl}`
+        );
+        return res
+          .status(200)
+          .json(
+            new ApiResponse(
+              200,
+              { duplicate: true },
+              "Lead already exists; skipped"
+            )
+          );
+      }
+
       // Create lead record from scraped data
       const leadData = {
         companyId: form.companyId,
@@ -427,25 +454,37 @@ const submitFormData = asyncHandler(async (req, res) => {
         );
       }
 
-      // Send lead notification email to company
-      try {
-        await emailService.sendLeadNotificationEmail(
-          lead,
-          form,
-          form.companyId
-        );
+      // Send lead notification email to company when enabled in settings
+      if (form.companyId.settings?.leadNotifications) {
+        try {
+          await emailService.sendLeadNotificationEmail(
+            lead,
+            form,
+            form.companyId
+          );
+          console.log(
+            `✅ Lead notification email sent to company: ${form.companyId.email}`
+          );
+        } catch (error) {
+          console.error(
+            "Failed to send lead notification email to company:",
+            error
+          );
+        }
+      } else {
         console.log(
-          `✅ Lead notification email sent to company: ${form.companyId.email}`
-        );
-      } catch (error) {
-        console.error(
-          "Failed to send lead notification email to company:",
-          error
+          `ℹ️ Lead notification email disabled for company: ${form.companyId._id}`
         );
       }
 
-      // Apply BANT qualification (async, non-blocking)
-      qualifyLeadInBackground(lead);
+      // Apply BANT qualification if enabled in company settings (async, non-blocking)
+      if (form.companyId.settings?.autoBANTQualification) {
+        qualifyLeadInBackground(lead);
+      } else {
+        console.log(
+          `[BANT] Auto-qualification disabled for company: ${form.companyId._id}`
+        );
+      }
     } catch (scrapingError) {
       console.error("Scraping Error Details:", scrapingError);
     }

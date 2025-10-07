@@ -257,7 +257,7 @@ This is normal if you haven't set up PayFort credentials. You can:
 
 ```bash
 # Listen for webhooks
-stripe listen --forward-to localhost:5000/api/v1/billing/webhook/stripe
+stripe listen --forward-to localhost:4000/api/v1/billing/webhook/stripe
 
 # Trigger test events
 stripe trigger checkout.session.completed
@@ -270,23 +270,3 @@ stripe events list --limit 10
 # View logs
 stripe logs tail
 ```
-
-## Moving to Production
-
-1. Switch to live API keys in Stripe dashboard
-2. Update `.env` with live keys (starts with `sk_live_` and `whsec_`)
-3. Configure production webhook URL (your real domain)
-4. Test with a real card (use small amount like $0.50)
-5. Set up monitoring and alerts
-
-## Support
-
-- **Stripe Docs:** https://stripe.com/docs
-- **Stripe Support:** https://support.stripe.com
-- **Test Cards:** https://stripe.com/docs/testing
-
----
-
-**You're all set!** 🎉
-
-Your Stripe integration is complete. Users can now subscribe to paid plans with credit cards.

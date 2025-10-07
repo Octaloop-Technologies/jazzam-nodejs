@@ -4,67 +4,202 @@ import { Company } from "../models/company.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Validator } from "../utils/validator.js";
+import {
+  generateAuthUrl,
+  exchangeCodeForToken,
+  refreshAccessToken,
+  revokeToken,
+  calculateTokenExpiry,
+  getConfiguredProviders,
+} from "../services/crm/oauth.service.js";
+import { testCrmConnection as testCrmConnectionApi } from "../services/crm/api.service.js";
+import {
+  syncLeadsToCrm as syncLeadsService,
+  importLeadsFromCrm,
+  getSyncStatus,
+  retryFailedSyncs,
+} from "../services/crm/sync.service.js";
 
 // ==============================================================
-// CRM Integration Management Functions
+// OAuth2 Flow
 // ==============================================================
 
-const createCrmIntegration = asyncHandler(async (req, res) => {
-  const { provider, credentials, tokens, settings } = req.body;
+/**
+ * Get configured CRM providers
+ * @route GET /api/v1/crm-integration/providers
+ */
+const getProviders = asyncHandler(async (req, res) => {
+  const providers = getConfiguredProviders();
 
-  // Validate required fields
-  const validationRules = {
-    provider: { type: "required" },
-    credentials: { type: "required" },
-    tokens: { type: "required" },
-  };
+  const providersWithInfo = providers.map((provider) => ({
+    id: provider,
+    name: provider.charAt(0).toUpperCase() + provider.slice(1),
+    configured: true,
+  }));
 
-  Validator.validateFields(req.body, validationRules);
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, providersWithInfo, "Providers fetched successfully")
+    );
+});
 
-  // Check if company already has an integration
+/**
+ * Initialize OAuth2 flow
+ * @route POST /api/v1/crm-integration/oauth/init
+ */
+const initOAuthFlow = asyncHandler(async (req, res) => {
+  const { provider } = req.body;
+  const company = req.company;
+
+  if (!provider) {
+    throw new ApiError(400, "Provider is required");
+  }
+
+  // Check if company already has integration
   const existingIntegration = await CrmIntegration.findOne({
-    companyId: req.company._id,
+    companyId: company._id,
+    provider,
   });
 
   if (existingIntegration) {
-    throw new ApiError(409, "Company already has a CRM integration");
-  }
-
-  // Create CRM integration
-  const crmIntegration = await CrmIntegration.create({
-    companyId: req.company._id,
-    provider,
-    credentials,
-    tokens,
-    settings: settings || {},
-  });
-
-  // Test the connection
-  const connectionTest = await crmIntegration.testConnection();
-
-  if (!connectionTest.success) {
-    await CrmIntegration.findByIdAndDelete(crmIntegration._id);
     throw new ApiError(
-      400,
-      `Failed to connect to ${provider}: ${connectionTest.message}`
+      409,
+      `Integration with ${provider} already exists. Please disconnect first.`
     );
   }
 
-  // Update status to active
-  crmIntegration.status = "active";
-  crmIntegration.accountInfo = connectionTest.accountInfo;
-  await crmIntegration.save();
+  try {
+    const { authUrl, state } = generateAuthUrl(
+      provider,
+      company._id.toString()
+    );
 
-  return res
-    .status(201)
-    .json(
+    return res.status(200).json(
       new ApiResponse(
-        201,
-        crmIntegration,
-        "CRM integration created successfully"
+        200,
+        {
+          authUrl,
+          state,
+          provider,
+        },
+        "OAuth flow initialized"
       )
     );
+  } catch (error) {
+    console.error("OAuth init error:", error);
+    throw new ApiError(500, error.message || "Failed to initialize OAuth flow");
+  }
 });
+
+/**
+ * Handle OAuth2 callback
+ * @route GET /api/v1/crm-integration/oauth/callback/:provider
+ */
+const handleOAuthCallback = asyncHandler(async (req, res) => {
+  const { provider } = req.params;
+  const { code, state, error, error_description } = req.query;
+
+  // Handle OAuth errors
+  if (error) {
+    console.error(`OAuth error for ${provider}:`, error_description);
+    return res.redirect(
+      `${process.env.CLIENT_URL}/super-user/settings?integration=failed&error=${encodeURIComponent(error_description || error)}`
+    );
+  }
+
+  if (!code || !state) {
+    return res.redirect(
+      `${process.env.CLIENT_URL}/super-user/settings?integration=failed&error=Missing+code+or+state`
+    );
+  }
+
+  try {
+    // Exchange code for tokens (this also validates and returns state data)
+    const tokenData = await exchangeCodeForToken(provider, code, state);
+
+    // The state is validated inside exchangeCodeForToken, but we need to extract companyId
+    // We need to get it from the token exchange response which includes state data
+    const stateData = tokenData.stateData || {};
+    const companyId = stateData.companyId;
+
+    // Prepare credentials based on provider
+    let credentials = {};
+    switch (provider) {
+      case "zoho":
+        credentials = {
+          apiDomain: tokenData.apiDomain,
+        };
+        break;
+      case "salesforce":
+        credentials = {
+          instanceUrl: tokenData.instanceUrl,
+          id: tokenData.id,
+        };
+        break;
+      case "dynamics":
+        credentials = {
+          resource:
+            process.env.DYNAMICS_RESOURCE ||
+            "https://yourdomain.crm.dynamics.com",
+        };
+        break;
+      default:
+        credentials = {};
+    }
+
+    // Test connection
+    const connectionTest = await testCrmConnectionApi(
+      provider,
+      tokenData.accessToken,
+      credentials
+    );
+
+    if (!connectionTest.success) {
+      throw new ApiError(
+        400,
+        `Connection test failed: ${connectionTest.error}`
+      );
+    }
+
+    // Create CRM integration
+    const crmIntegration = await CrmIntegration.create({
+      companyId,
+      provider,
+      status: "active",
+      credentials,
+      tokens: {
+        accessToken: tokenData.accessToken,
+        refreshToken: tokenData.refreshToken,
+        tokenExpiry: calculateTokenExpiry(tokenData.expiresIn),
+        scope: tokenData.scope,
+      },
+      accountInfo: {
+        accountId: connectionTest.userInfo?.id,
+        accountName: connectionTest.userInfo?.name,
+        accountEmail: connectionTest.userInfo?.email,
+      },
+    });
+
+    console.log(
+      `CRM integration created for company ${companyId} with ${provider}`
+    );
+
+    // Redirect to success page
+    return res.redirect(
+      `${process.env.CLIENT_URL}/super-user/settings?integration=success&provider=${provider}`
+    );
+  } catch (error) {
+    console.error("OAuth callback error:", error);
+    return res.redirect(
+      `${process.env.CLIENT_URL}/super-user/settings?integration=failed&error=${encodeURIComponent(error.message)}`
+    );
+  }
+});
+
+// ==============================================================
+// CRM Integration Management
+// ==============================================================
 
 const getCrmIntegration = asyncHandler(async (req, res) => {
   const crmIntegration = await CrmIntegration.findOne({
@@ -72,14 +207,21 @@ const getCrmIntegration = asyncHandler(async (req, res) => {
   });
 
   if (!crmIntegration) {
-    throw new ApiError(404, "CRM integration not found");
+    return res
+      .status(200)
+      .json(new ApiResponse(200, null, "No CRM integration found"));
   }
 
   // Remove sensitive data from response
   const safeIntegration = {
     ...crmIntegration.toObject(),
     credentials: undefined,
-    tokens: undefined,
+    tokens: {
+      hasAccessToken: !!crmIntegration.tokens?.accessToken,
+      hasRefreshToken: !!crmIntegration.tokens?.refreshToken,
+      tokenExpiry: crmIntegration.tokens?.tokenExpiry,
+      scope: crmIntegration.tokens?.scope,
+    },
   };
 
   return res
@@ -94,7 +236,7 @@ const getCrmIntegration = asyncHandler(async (req, res) => {
 });
 
 const updateCrmIntegration = asyncHandler(async (req, res) => {
-  const { credentials, tokens, settings } = req.body;
+  const { settings } = req.body;
 
   const crmIntegration = await CrmIntegration.findOne({
     companyId: req.company._id,
@@ -104,40 +246,19 @@ const updateCrmIntegration = asyncHandler(async (req, res) => {
     throw new ApiError(404, "CRM integration not found");
   }
 
-  // Update integration
-  const updatedIntegration = await CrmIntegration.findOneAndUpdate(
-    { companyId: req.company._id },
-    {
-      $set: {
-        ...(credentials && { credentials }),
-        ...(tokens && { tokens }),
-        ...(settings && {
-          settings: { ...crmIntegration.settings, ...settings },
-        }),
-      },
-    },
-    { new: true }
-  );
-
-  // Test the connection if credentials or tokens were updated
-  if (credentials || tokens) {
-    const connectionTest = await updatedIntegration.testConnection();
-
-    if (!connectionTest.success) {
-      throw new ApiError(
-        400,
-        `Failed to connect to ${updatedIntegration.provider}: ${connectionTest.message}`
-      );
-    }
-
-    updatedIntegration.status = "active";
-    updatedIntegration.accountInfo = connectionTest.accountInfo;
-    await updatedIntegration.save();
+  // Update settings
+  if (settings) {
+    crmIntegration.settings = {
+      ...crmIntegration.settings,
+      ...settings,
+    };
   }
+
+  await crmIntegration.save();
 
   // Remove sensitive data from response
   const safeIntegration = {
-    ...updatedIntegration.toObject(),
+    ...crmIntegration.toObject(),
     credentials: undefined,
     tokens: undefined,
   };
@@ -154,13 +275,25 @@ const updateCrmIntegration = asyncHandler(async (req, res) => {
 });
 
 const deleteCrmIntegration = asyncHandler(async (req, res) => {
-  const crmIntegration = await CrmIntegration.findOneAndDelete({
+  const crmIntegration = await CrmIntegration.findOne({
     companyId: req.company._id,
   });
 
   if (!crmIntegration) {
     throw new ApiError(404, "CRM integration not found");
   }
+
+  // Revoke tokens
+  try {
+    await revokeToken(
+      crmIntegration.provider,
+      crmIntegration.tokens.accessToken
+    );
+  } catch (error) {
+    console.warn("Token revocation failed:", error);
+  }
+
+  await CrmIntegration.findByIdAndDelete(crmIntegration._id);
 
   return res
     .status(200)
@@ -176,19 +309,39 @@ const testCrmConnection = asyncHandler(async (req, res) => {
     throw new ApiError(404, "CRM integration not found");
   }
 
-  const connectionTest = await crmIntegration.testConnection();
+  // Refresh tokens if needed
+  if (crmIntegration.needsTokenRefresh()) {
+    try {
+      const refreshedTokens = await refreshAccessToken(
+        crmIntegration.provider,
+        crmIntegration.tokens.refreshToken
+      );
 
-  if (!connectionTest.success) {
-    // Update integration status to error
-    crmIntegration.status = "error";
-    await crmIntegration.save();
-
-    throw new ApiError(400, connectionTest.message);
+      crmIntegration.tokens.accessToken = refreshedTokens.accessToken;
+      crmIntegration.tokens.tokenExpiry = calculateTokenExpiry(
+        refreshedTokens.expiresIn
+      );
+      await crmIntegration.save();
+    } catch (error) {
+      crmIntegration.status = "error";
+      await crmIntegration.save();
+      throw new ApiError(400, "Token refresh failed. Please reconnect.");
+    }
   }
 
-  // Update integration status to active
+  const connectionTest = await testCrmConnectionApi(
+    crmIntegration.provider,
+    crmIntegration.tokens.accessToken,
+    crmIntegration.credentials
+  );
+
+  if (!connectionTest.success) {
+    crmIntegration.status = "error";
+    await crmIntegration.save();
+    throw new ApiError(400, connectionTest.error);
+  }
+
   crmIntegration.status = "active";
-  crmIntegration.accountInfo = connectionTest.accountInfo;
   await crmIntegration.save();
 
   return res
@@ -198,8 +351,16 @@ const testCrmConnection = asyncHandler(async (req, res) => {
     );
 });
 
+// ==============================================================
+// Lead Sync
+// ==============================================================
+
 const syncLeadsToCrm = asyncHandler(async (req, res) => {
   const { leadIds } = req.body;
+
+  if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+    throw new ApiError(400, "Lead IDs array is required");
+  }
 
   const crmIntegration = await CrmIntegration.findOne({
     companyId: req.company._id,
@@ -210,58 +371,51 @@ const syncLeadsToCrm = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Active CRM integration not found");
   }
 
-  // Check if tokens need refresh
-  if (crmIntegration.needsTokenRefresh()) {
-    throw new ApiError(400, "CRM tokens need to be refreshed");
+  const results = await syncLeadsService(leadIds, crmIntegration);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, results, "Leads sync completed"));
+});
+
+const importFromCrm = asyncHandler(async (req, res) => {
+  const crmIntegration = await CrmIntegration.findOne({
+    companyId: req.company._id,
+    status: "active",
+  });
+
+  if (!crmIntegration) {
+    throw new ApiError(404, "Active CRM integration not found");
   }
 
-  // Here you would implement the actual sync logic based on the CRM provider
-  // For now, we'll return a mock response
-  const syncResults = {
-    totalLeads: leadIds.length,
-    successfulSyncs: leadIds.length,
-    failedSyncs: 0,
-    errors: [],
-  };
-
-  // Update sync statistics
-  await crmIntegration.updateSyncStats(true, "Sync completed successfully");
+  const results = await importLeadsFromCrm(crmIntegration, req.query);
 
   return res
     .status(200)
     .json(
-      new ApiResponse(200, syncResults, "Leads synced to CRM successfully")
+      new ApiResponse(200, results, "Leads imported from CRM successfully")
     );
 });
 
 const getCrmSyncStatus = asyncHandler(async (req, res) => {
-  const crmIntegration = await CrmIntegration.findOne({
-    companyId: req.company._id,
-  });
-
-  if (!crmIntegration) {
-    throw new ApiError(404, "CRM integration not found");
-  }
-
-  const syncStatus = {
-    status: crmIntegration.status,
-    lastSyncAt: crmIntegration.settings.autoSync.lastSyncAt,
-    nextSyncAt: crmIntegration.settings.autoSync.lastSyncAt
-      ? new Date(
-          crmIntegration.settings.autoSync.lastSyncAt.getTime() +
-            crmIntegration.settings.autoSync.interval * 1000
-        )
-      : null,
-    stats: crmIntegration.stats,
-    autoSyncEnabled: crmIntegration.settings.autoSync.enabled,
-  };
+  const syncStatus = await getSyncStatus(req.company._id);
 
   return res
     .status(200)
-    .json(
-      new ApiResponse(200, syncStatus, "CRM sync status fetched successfully")
-    );
+    .json(new ApiResponse(200, syncStatus, "Sync status fetched successfully"));
 });
+
+const retryFailedLeads = asyncHandler(async (req, res) => {
+  const results = await retryFailedSyncs(req.company._id);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, results, "Failed syncs retried"));
+});
+
+// ==============================================================
+// Field Mapping
+// ==============================================================
 
 const updateFieldMapping = asyncHandler(async (req, res) => {
   const { fieldMapping } = req.body;
@@ -274,7 +428,6 @@ const updateFieldMapping = asyncHandler(async (req, res) => {
     throw new ApiError(404, "CRM integration not found");
   }
 
-  // Update field mapping
   crmIntegration.settings.fieldMapping = {
     ...crmIntegration.settings.fieldMapping,
     ...fieldMapping,
@@ -292,6 +445,10 @@ const updateFieldMapping = asyncHandler(async (req, res) => {
       )
     );
 });
+
+// ==============================================================
+// Error Logs
+// ==============================================================
 
 const getCrmErrorLogs = asyncHandler(async (req, res) => {
   const { limit = 50 } = req.query;
@@ -340,13 +497,17 @@ const resolveCrmError = asyncHandler(async (req, res) => {
 });
 
 export {
-  createCrmIntegration,
+  getProviders,
+  initOAuthFlow,
+  handleOAuthCallback,
   getCrmIntegration,
   updateCrmIntegration,
   deleteCrmIntegration,
   testCrmConnection,
   syncLeadsToCrm,
+  importFromCrm,
   getCrmSyncStatus,
+  retryFailedLeads,
   updateFieldMapping,
   getCrmErrorLogs,
   resolveCrmError,

@@ -35,7 +35,11 @@ validateEnvironment();
 // ==========================================================
 // Security headers and middleware
 // ==========================================================
-app.use(helmet()); // Security headers first
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin access for static assets
+  })
+); // Security headers first
 app.use(securityHeaders); // Custom security headers
 app.use(cors(corsOptions)); // CORS configuration
 app.use(generalRateLimit); // General rate limiting
@@ -140,7 +144,6 @@ import formRouter from "./routes/form.routes.js";
 import leadRouter from "./routes/lead.routes.js";
 import crmIntegrationRouter from "./routes/crmIntegration.routes.js";
 import waitlistRouter from "./routes/waitlist.routes.js";
-import webhookRouter from "./routes/webhook.routes.js";
 import subscriptionRouter from "./routes/subscription.routes.js";
 
 // ==========================================================
@@ -156,7 +159,6 @@ app.use("/api/v1/forms", formRouter);
 app.use("/api/v1/leads", leadRouter);
 app.use("/api/v1/crm-integration", crmIntegrationRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
-app.use("/api/v1/webhook", webhookRouter);
 app.use("/api/v1/billing", subscriptionRouter);
 
 // ==========================================================

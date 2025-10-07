@@ -14,6 +14,7 @@ import {
   updateOnboardingStatus,
   updateCompanyLogo,
   updateSubscriptionStatus,
+  updateSettings,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -85,6 +86,9 @@ router
 
 // PATCH /api/v1/companies/subscription
 router.route("/subscription").patch(verifyJWT, updateSubscriptionStatus);
+
+// PATCH /api/v1/companies/settings
+router.route("/settings").patch(verifyJWT, updateSettings);
 
 // DELETE /api/v1/companies/delete-account
 router.route("/delete-account").delete(verifyJWT, deleteCompany);

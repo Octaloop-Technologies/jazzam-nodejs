@@ -1,12 +1,16 @@
 import { Router } from "express";
 import {
-  createCrmIntegration,
+  getProviders,
+  initOAuthFlow,
+  handleOAuthCallback,
   getCrmIntegration,
   updateCrmIntegration,
   deleteCrmIntegration,
   testCrmConnection,
   syncLeadsToCrm,
+  importFromCrm,
   getCrmSyncStatus,
+  retryFailedLeads,
   updateFieldMapping,
   getCrmErrorLogs,
   resolveCrmError,
@@ -16,13 +20,23 @@ import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router();
 
 // ================================================
+// Public OAuth callback routes (no auth required)
+// ================================================
+
+// GET /api/v1/crm-integration/oauth/callback/:provider
+router.route("/oauth/callback/:provider").get(handleOAuthCallback);
+
+// ================================================
 // Secured routes (authentication required)
 // ================================================
 
 router.use(verifyJWT);
 
-// POST /api/v1/crm-integration (Create CRM integration)
-router.route("/").post(createCrmIntegration);
+// GET /api/v1/crm-integration/providers (Get configured providers)
+router.route("/providers").get(getProviders);
+
+// POST /api/v1/crm-integration/oauth/init (Initialize OAuth flow)
+router.route("/oauth/init").post(initOAuthFlow);
 
 // GET /api/v1/crm-integration (Get CRM integration)
 router.route("/").get(getCrmIntegration);
@@ -39,8 +53,14 @@ router.route("/test-connection").post(testCrmConnection);
 // POST /api/v1/crm-integration/sync-leads (Sync leads to CRM)
 router.route("/sync-leads").post(syncLeadsToCrm);
 
+// POST /api/v1/crm-integration/import (Import leads from CRM)
+router.route("/import").post(importFromCrm);
+
 // GET /api/v1/crm-integration/sync-status (Get sync status)
 router.route("/sync-status").get(getCrmSyncStatus);
+
+// POST /api/v1/crm-integration/retry-failed (Retry failed syncs)
+router.route("/retry-failed").post(retryFailedLeads);
 
 // PATCH /api/v1/crm-integration/field-mapping (Update field mapping)
 router.route("/field-mapping").patch(updateFieldMapping);

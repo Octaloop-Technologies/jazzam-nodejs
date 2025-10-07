@@ -347,6 +347,8 @@ leadSchema.index({ companyId: 1, status: 1 });
 leadSchema.index({ companyId: 1, formId: 1 });
 leadSchema.index({ companyId: 1, platform: 1 });
 leadSchema.index({ companyId: 1, createdAt: -1 });
+// Ensure no duplicate leads per company for the same platform URL
+leadSchema.index({ companyId: 1, platformUrl: 1 }, { unique: true });
 leadSchema.index({ email: 1, companyId: 1 });
 leadSchema.index({ status: 1, companyIndustry: 1 });
 leadSchema.index({ createdAt: -1 });
