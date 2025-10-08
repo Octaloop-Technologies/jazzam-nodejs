@@ -1,11 +1,13 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Form } from "../models/form.model.js";
 import { Lead } from "../models/lead.model.js";
+import { CrmIntegration } from "../models/crmIntegration.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import scrapingService from "../services/scraping.service.js";
 import emailService from "../services/email.service.js";
 import bantService from "../services/bant.service.js";
+import { syncLeadToCrm } from "../services/crm/sync.service.js";
 
 // ==============================================================
 // Form Management Functions
@@ -485,6 +487,9 @@ const submitFormData = asyncHandler(async (req, res) => {
           `[BANT] Auto-qualification disabled for company: ${form.companyId._id}`
         );
       }
+
+      // Sync lead to CRM if integration is active (async, non-blocking)
+      syncLeadToCrmInBackground(lead, form.companyId._id);
     } catch (scrapingError) {
       console.error("Scraping Error Details:", scrapingError);
     }
@@ -523,6 +528,45 @@ const qualifyLeadInBackground = async (lead) => {
     );
   } catch (error) {
     console.error(`[BANT] Error qualifying lead ${lead._id}:`, error.message);
+  }
+};
+
+// Sync lead to CRM in background (non-blocking)
+const syncLeadToCrmInBackground = async (lead, companyId) => {
+  try {
+    console.log(`[CRM] Starting background sync for lead ${lead._id} to CRM`);
+
+    // Find active CRM integration for the company
+    const crmIntegration = await CrmIntegration.findOne({
+      companyId: companyId,
+      status: "active",
+    });
+
+    if (!crmIntegration) {
+      console.log(
+        `[CRM] No active CRM integration found for company: ${companyId}`
+      );
+      return;
+    }
+
+    // Sync the lead to CRM
+    const syncResult = await syncLeadToCrm(lead._id, crmIntegration);
+
+    if (syncResult.success) {
+      console.log(
+        `[CRM] Successfully synced lead ${lead._id} to ${crmIntegration.provider} CRM - CRM ID: ${syncResult.crmId}`
+      );
+    } else {
+      console.error(
+        `[CRM] Failed to sync lead ${lead._id} to CRM:`,
+        syncResult.error
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[CRM] Error syncing lead ${lead._id} to CRM:`,
+      error.message
+    );
   }
 };
 
