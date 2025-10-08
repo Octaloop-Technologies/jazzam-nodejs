@@ -3,7 +3,6 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Lead } from "../models/lead.model.js";
 import mongoose from "mongoose";
-import webhookService from "../services/webhook.service.js";
 import bantService from "../services/bant.service.js";
 
 // ==============================================================
@@ -160,28 +159,6 @@ const updateLeadById = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Lead not found");
     }
 
-    // Send webhook notification for lead update (async, don't wait for response)
-    webhookService
-      .sendLeadToWebhook(updatedLead)
-      .then((result) => {
-        if (result.success) {
-          console.log(
-            `[Webhook] Lead update ${updatedLead._id} successfully sent to Make.com`
-          );
-        } else {
-          console.error(
-            `[Webhook] Failed to send lead update ${updatedLead._id} to Make.com:`,
-            result.error
-          );
-        }
-      })
-      .catch((error) => {
-        console.error(
-          `[Webhook] Unexpected error sending lead update ${updatedLead._id} to Make.com:`,
-          error
-        );
-      });
-
     return res
       .status(200)
       .json(new ApiResponse(200, updatedLead, "Lead updated successfully"));
@@ -299,28 +276,6 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
     lead.status = status;
     if (notes !== undefined) lead.notes = notes;
     await lead.save();
-
-    // Send webhook notification for lead update (async, don't wait for response)
-    webhookService
-      .sendLeadToWebhook(lead)
-      .then((result) => {
-        if (result.success) {
-          console.log(
-            `[Webhook] Lead status update ${lead._id} successfully sent to Make.com`
-          );
-        } else {
-          console.error(
-            `[Webhook] Failed to send lead status update ${lead._id} to Make.com:`,
-            result.error
-          );
-        }
-      })
-      .catch((error) => {
-        console.error(
-          `[Webhook] Unexpected error sending lead status update ${lead._id} to Make.com:`,
-          error
-        );
-      });
 
     return res
       .status(200)
@@ -503,23 +458,6 @@ const qualifyLeadBANT = asyncHandler(async (req, res) => {
     // Update lead with BANT data using shared service method
     const bantData = qualificationResult.data;
     await bantService.updateLeadWithBANT(lead, bantData);
-
-    // Send webhook notification for lead update (async, don't wait for response)
-    webhookService
-      .sendLeadToWebhook(lead)
-      .then((result) => {
-        if (result.success) {
-          console.log(
-            `[Webhook] BANT qualified lead ${lead._id} successfully sent to Make.com`
-          );
-        }
-      })
-      .catch((error) => {
-        console.error(
-          `[Webhook] Error sending BANT qualified lead ${lead._id}:`,
-          error
-        );
-      });
 
     return res
       .status(200)
