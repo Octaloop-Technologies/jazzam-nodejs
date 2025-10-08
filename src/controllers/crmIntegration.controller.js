@@ -137,6 +137,12 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
           id: tokenData.id,
         };
         break;
+      case "hubspot":
+        credentials = {
+          // HubSpot doesn't require special credentials beyond OAuth tokens
+          portalId: tokenData.portalId || null,
+        };
+        break;
       case "dynamics":
         credentials = {
           resource:
@@ -298,6 +304,68 @@ const deleteCrmIntegration = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, null, "CRM integration deleted successfully"));
+});
+
+// Fix existing CRM integrations missing credentials
+const fixCrmIntegrationCredentials = asyncHandler(async (req, res) => {
+  const crmIntegration = await CrmIntegration.findOne({
+    companyId: req.company._id,
+  });
+
+  if (!crmIntegration) {
+    throw new ApiError(404, "CRM integration not found");
+  }
+
+  // Check if credentials are missing or empty
+  if (
+    !crmIntegration.credentials ||
+    Object.keys(crmIntegration.credentials).length === 0
+  ) {
+    console.log(
+      `Fixing missing credentials for ${crmIntegration.provider} integration`
+    );
+
+    // Set default credentials based on provider
+    let credentials = {};
+    switch (crmIntegration.provider) {
+      case "zoho":
+        credentials = {
+          apiDomain: "https://www.zohoapis.com", // Default Zoho API domain
+        };
+        break;
+      case "salesforce":
+        credentials = {
+          instanceUrl: "https://login.salesforce.com",
+        };
+        break;
+      case "hubspot":
+        credentials = {
+          portalId: null, // HubSpot doesn't require special credentials
+        };
+        break;
+      case "dynamics":
+        credentials = {
+          resource:
+            process.env.DYNAMICS_RESOURCE ||
+            "https://yourdomain.crm.dynamics.com",
+        };
+        break;
+      default:
+        credentials = {};
+    }
+
+    // Update the integration with credentials
+    crmIntegration.credentials = credentials;
+    await crmIntegration.save();
+
+    console.log(
+      `✅ Fixed credentials for ${crmIntegration.provider} integration`
+    );
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, "CRM integration credentials fixed"));
 });
 
 const testCrmConnection = asyncHandler(async (req, res) => {
@@ -503,6 +571,7 @@ export {
   getCrmIntegration,
   updateCrmIntegration,
   deleteCrmIntegration,
+  fixCrmIntegrationCredentials,
   testCrmConnection,
   syncLeadsToCrm,
   importFromCrm,

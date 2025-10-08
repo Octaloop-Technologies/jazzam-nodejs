@@ -6,6 +6,7 @@ import {
   getCrmIntegration,
   updateCrmIntegration,
   deleteCrmIntegration,
+  fixCrmIntegrationCredentials,
   testCrmConnection,
   syncLeadsToCrm,
   importFromCrm,
@@ -46,6 +47,9 @@ router.route("/").patch(updateCrmIntegration);
 
 // DELETE /api/v1/crm-integration (Delete CRM integration)
 router.route("/").delete(deleteCrmIntegration);
+
+// POST /api/v1/crm-integration/fix-credentials (Fix missing credentials)
+router.route("/fix-credentials").post(fixCrmIntegrationCredentials);
 
 // POST /api/v1/crm-integration/test-connection (Test CRM connection)
 router.route("/test-connection").post(testCrmConnection);
