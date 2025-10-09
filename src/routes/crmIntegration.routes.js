@@ -42,17 +42,17 @@ router.route("/oauth/init").post(initOAuthFlow);
 // GET /api/v1/crm-integration (Get CRM integration)
 router.route("/").get(getCrmIntegration);
 
-// PATCH /api/v1/crm-integration (Update CRM integration)
-router.route("/").patch(updateCrmIntegration);
+// PATCH /api/v1/crm-integration/:integrationId (Update CRM integration)
+router.route("/:integrationId").patch(updateCrmIntegration);
 
-// DELETE /api/v1/crm-integration (Delete CRM integration)
-router.route("/").delete(deleteCrmIntegration);
+// DELETE /api/v1/crm-integration/:integrationId (Delete CRM integration)
+router.route("/:integrationId").delete(deleteCrmIntegration);
 
 // POST /api/v1/crm-integration/fix-credentials (Fix missing credentials)
 router.route("/fix-credentials").post(fixCrmIntegrationCredentials);
 
-// POST /api/v1/crm-integration/test-connection (Test CRM connection)
-router.route("/test-connection").post(testCrmConnection);
+// POST /api/v1/crm-integration/:integrationId/test-connection (Test CRM connection)
+router.route("/:integrationId/test-connection").post(testCrmConnection);
 
 // POST /api/v1/crm-integration/sync-leads (Sync leads to CRM)
 router.route("/sync-leads").post(syncLeadsToCrm);

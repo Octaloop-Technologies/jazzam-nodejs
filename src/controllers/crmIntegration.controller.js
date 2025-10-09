@@ -56,7 +56,7 @@ const initOAuthFlow = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Provider is required");
   }
 
-  // Check if company already has integration
+  // Check if company already has integration with this provider
   const existingIntegration = await CrmIntegration.findOne({
     companyId: company._id,
     provider,
@@ -66,6 +66,28 @@ const initOAuthFlow = asyncHandler(async (req, res) => {
     throw new ApiError(
       409,
       `Integration with ${provider} already exists. Please disconnect first.`
+    );
+  }
+
+  // Check channel limits based on subscription plan
+  const currentIntegrations = await CrmIntegration.countDocuments({
+    companyId: company._id,
+    status: { $in: ["active", "inactive"] },
+  });
+
+  const channelLimits = {
+    free: 0,
+    starter: 1,
+    pro: 2,
+    growth: Infinity, // unlimited
+  };
+
+  const planLimit = channelLimits[company.subscriptionPlan] || 0;
+
+  if (currentIntegrations >= planLimit) {
+    throw new ApiError(
+      403,
+      `Your ${company.subscriptionPlan} plan allows only ${planLimit === Infinity ? "unlimited" : planLimit} channel${planLimit === 1 ? "" : "s"}. Please upgrade your plan to add more channels.`
     );
   }
 
@@ -208,43 +230,42 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
 // ==============================================================
 
 const getCrmIntegration = asyncHandler(async (req, res) => {
-  const crmIntegration = await CrmIntegration.findOne({
+  const crmIntegrations = await CrmIntegration.find({
     companyId: req.company._id,
-  });
-
-  if (!crmIntegration) {
-    return res
-      .status(200)
-      .json(new ApiResponse(200, null, "No CRM integration found"));
-  }
+  }).sort({ createdAt: -1 });
 
   // Remove sensitive data from response
-  const safeIntegration = {
-    ...crmIntegration.toObject(),
+  const safeIntegrations = crmIntegrations.map((integration) => ({
+    ...integration.toObject(),
     credentials: undefined,
     tokens: {
-      hasAccessToken: !!crmIntegration.tokens?.accessToken,
-      hasRefreshToken: !!crmIntegration.tokens?.refreshToken,
-      tokenExpiry: crmIntegration.tokens?.tokenExpiry,
-      scope: crmIntegration.tokens?.scope,
+      hasAccessToken: !!integration.tokens?.accessToken,
+      hasRefreshToken: !!integration.tokens?.refreshToken,
+      tokenExpiry: integration.tokens?.tokenExpiry,
+      scope: integration.tokens?.scope,
     },
-  };
+  }));
 
   return res
     .status(200)
     .json(
       new ApiResponse(
         200,
-        safeIntegration,
-        "CRM integration fetched successfully"
+        safeIntegrations,
+        "CRM integrations fetched successfully"
       )
     );
 });
 
 const updateCrmIntegration = asyncHandler(async (req, res) => {
-  const { settings } = req.body;
+  const { integrationId, settings } = req.body;
+
+  if (!integrationId) {
+    throw new ApiError(400, "Integration ID is required");
+  }
 
   const crmIntegration = await CrmIntegration.findOne({
+    _id: integrationId,
     companyId: req.company._id,
   });
 
@@ -281,7 +302,14 @@ const updateCrmIntegration = asyncHandler(async (req, res) => {
 });
 
 const deleteCrmIntegration = asyncHandler(async (req, res) => {
+  const { integrationId } = req.params;
+
+  if (!integrationId) {
+    throw new ApiError(400, "Integration ID is required");
+  }
+
   const crmIntegration = await CrmIntegration.findOne({
+    _id: integrationId,
     companyId: req.company._id,
   });
 
@@ -369,7 +397,14 @@ const fixCrmIntegrationCredentials = asyncHandler(async (req, res) => {
 });
 
 const testCrmConnection = asyncHandler(async (req, res) => {
+  const { integrationId } = req.params;
+
+  if (!integrationId) {
+    throw new ApiError(400, "Integration ID is required");
+  }
+
   const crmIntegration = await CrmIntegration.findOne({
+    _id: integrationId,
     companyId: req.company._id,
   });
 

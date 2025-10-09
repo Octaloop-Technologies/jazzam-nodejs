@@ -2,12 +2,11 @@ import mongoose, { Schema } from "mongoose";
 
 const crmIntegrationSchema = new Schema(
   {
-    // Company Reference (One-to-One relationship)
+    // Company Reference (One-to-Many relationship)
     companyId: {
       type: Schema.Types.ObjectId,
       ref: "Company",
       required: true,
-      unique: true,
     },
 
     // CRM Provider Information
@@ -373,6 +372,7 @@ crmIntegrationSchema.methods.testConnection = async function () {
 // Create indexes for better query performance
 crmIntegrationSchema.index({ "tokens.tokenExpiry": 1 });
 crmIntegrationSchema.index({ createdAt: -1 });
+crmIntegrationSchema.index({ companyId: 1, provider: 1 }, { unique: true }); // One integration per provider per company
 
 export const CrmIntegration = mongoose.model(
   "CrmIntegration",
