@@ -49,7 +49,7 @@ app.use(
   "/api/v1/billing/webhook/stripe",
   express.raw({ type: "application/json" }),
   (req, res, next) => {
-    req.rawBody = req.body.toString();
+    req.rawBody = req.body;
     next();
   }
 );

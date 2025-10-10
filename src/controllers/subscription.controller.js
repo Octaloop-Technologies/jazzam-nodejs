@@ -119,6 +119,8 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
   const signature = req.headers["stripe-signature"];
   const rawBody = req.rawBody; // We'll need to capture raw body in middleware
 
+  console.log("calling webhook**********")
+
   try {
     // Verify webhook signature
     const event = verifyStripeWebhook(rawBody, signature);
