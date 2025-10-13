@@ -5,6 +5,7 @@ import {
   handlePayfortCallback,
   cancelSubscription,
   createBillingPortal,
+  subscriptionHistory,
 } from "../controllers/subscription.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -13,6 +14,9 @@ const router = Router();
 // ==============================================================
 // Public webhook endpoints (no auth required - validated by signature)
 // ==============================================================
+
+// get billing history
+router.route("/:id/billing-history").get(subscriptionHistory)
 
 // Stripe webhook endpoint
 router.route("/webhook/stripe").post(handleStripeWebhook);
