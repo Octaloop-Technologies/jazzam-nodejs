@@ -18,6 +18,7 @@ import {
   storePendingPaymentMetadata,
   isPayfortConfigured,
 } from "../services/payfort.service.js";
+import { BillingHistory } from "../models/billingHistory.model.js";
 
 // ==============================================================
 // Checkout Session Creation
@@ -119,6 +120,8 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
   const signature = req.headers["stripe-signature"];
   const rawBody = req.rawBody; // We'll need to capture raw body in middleware
 
+  console.log("calling webhook**********")
+
   try {
     // Verify webhook signature
     const event = verifyStripeWebhook(rawBody, signature);
@@ -149,6 +152,12 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
           nextPaymentDate: paymentData.currentPeriodEnd,
           paymentCurrency: "USD",
         };
+
+        await BillingHistory.create({
+          userId: company._id,
+          subscriptionPlan: paymentData.plan,
+          status: 'pending',
+        });
 
         await company.save();
         console.log(`Subscription activated for company: ${company._id}`);
@@ -205,11 +214,16 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
         const company = await Company.findOne({
           "paymentDetails.stripeCustomerId": invoice.customer,
         });
+        const billingHistory = await BillingHistory.findOne({ userId: company?._id,  }).sort({ createdAt: -1 });
+
 
         if (company) {
           company.paymentDetails.lastPaymentDate = new Date();
           company.paymentDetails.lastPaymentAmount = invoice.amount_paid / 100;
           await company.save();
+          billingHistory.status = "paid";
+          billingHistory.amount = invoice.amount_paid / 100;
+          await billingHistory.save()
         }
         break;
       }
@@ -402,10 +416,24 @@ const createBillingPortal = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { url }, "Billing portal session created"));
 });
 
+const subscriptionHistory = async(req, res) => {
+  try {
+    const { id } = req.params;
+    const billingHistory = await BillingHistory.find({ userId: id });
+    if(!billingHistory){
+      return res.status(404).json({ success: false, message: "Billing history not found" })
+    }
+    return res.status(200).json({ success: true, message: "Billing history retrieved successfully", data: billingHistory })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Interval server error" });
+  }
+}
+
 export {
   createCheckoutSession,
   handleStripeWebhook,
   handlePayfortCallback,
   cancelSubscription,
   createBillingPortal,
+  subscriptionHistory
 };
