@@ -14,6 +14,9 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
       throw new ApiError(401, "Unauthorized request");
     }
 
+    console.log("token*****************", token)
+    console.log("accessTokenSecret", securityConfig.jwt.accessTokenSecret)
+
     // Verify token with proper error handling using centralized config
     const decodedToken = jwt.verify(
       token,
