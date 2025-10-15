@@ -10,6 +10,7 @@ import {
   getRefreshTokenCookieOptions,
   getClearAccessTokenCookieOptions,
   getClearRefreshTokenCookieOptions,
+  securityConfig,
 } from "../config/security.config.js";
 import {
   sendHtmlRedirect,
@@ -56,9 +57,9 @@ const handleSuccessfulOAuth = async (
       path: redirectPath,
     });
 
-    res.cookie('accessToken', accessToken);
+    res.cookie('accessToken', accessToken, securityConfig.cookies);
 
-    res.cookie('refreshToken', refreshToken);
+    res.cookie('refreshToken', refreshToken, securityConfig.cookies);
 
     return res.redirect(redirectUrl);
 
