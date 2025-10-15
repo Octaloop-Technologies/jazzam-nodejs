@@ -43,6 +43,8 @@ passport.use(
         // Check if company already exists with this Google ID
         let company = await Company.findOne({ googleId: profile.id });
 
+        console.log("accessToken:", accessToken);
+
         if (company) {
           return done(null, company);
         }

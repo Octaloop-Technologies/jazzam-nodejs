@@ -56,6 +56,12 @@ const handleSuccessfulOAuth = async (
       path: redirectPath,
     });
 
+    res.cookie('accessToken', accessToken);
+
+    res.cookie('refreshToken', refreshToken);
+
+    return res.redirect(redirectUrl);
+
     // Send HTML redirect with cookies
     sendHtmlRedirect(
       res,
