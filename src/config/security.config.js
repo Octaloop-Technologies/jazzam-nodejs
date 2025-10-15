@@ -90,7 +90,7 @@ export const securityConfig = {
     cookie: {
       secure: process.env.NODE_ENV === "production", // HTTPS only in production
       httpOnly: true, // Always secure for session cookies
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       domain:
         process.env.NODE_ENV === "production"
           ? process.env.COOKIE_DOMAIN || undefined
