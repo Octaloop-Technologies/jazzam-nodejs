@@ -15,7 +15,7 @@ export const securityConfig = {
   cookies: {
     httpOnly: process.env.NODE_ENV === "production" ? true : false,
     secure: process.env.NODE_ENV === "production" ? true : false,
-    sameSite: "lax",
+    sameSite:process.env.NODE_ENV === "production" ? "none" : "lax",  
     domain:
       process.env.NODE_ENV === "production"
         ? process.env.COOKIE_DOMAIN || ".jazzam.ai" // Default to .jazzam.ai if not set
