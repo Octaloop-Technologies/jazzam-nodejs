@@ -23,7 +23,8 @@ jobs:
         run: |
           cd /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs
 
-          sudo -u jazzam docker build -t jazzam-nodejs-image:latest .
+          sudo -u jazzam docker build --no-cache -t jazzam-nodejs-image:latest .
+
 
       - name: Stop & Remove Existing Container
         run: |
