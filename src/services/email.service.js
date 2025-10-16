@@ -50,9 +50,7 @@ class EmailService {
 
         // Create transporter with secure configuration
         this.#transporter = nodemailer.createTransport({
-          host: "smtp.hostinger.com",
-          port: 465,
-          service: "hostinger",
+          service: "gmail",
           auth: {
             user: process.env.EMAIL_COMPANY,
             pass: process.env.EMAIL_APP_PASSWORD,
