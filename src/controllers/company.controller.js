@@ -272,14 +272,29 @@ const logoutCompany = asyncHandler(async (req, res) => {
   );
 
   // Get cookie options for clearing cookies
-  const accessTokenOptions = getClearAccessTokenCookieOptions();
-  const refreshTokenOptions = getClearRefreshTokenCookieOptions();
+  // const accessTokenOptions = getClearAccessTokenCookieOptions();
+  // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
 
-  // Clear cookies
+  // clear cookies
+    res.clearCookie("accessToken", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    domain: ".jazzam.ai",
+    path: "/",
+  });
+
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    domain: ".jazzam.ai",
+    path: "/",
+  });
+
+  // send response
   return res
     .status(200)
-    .clearCookie("accessToken", accessTokenOptions)
-    .clearCookie("refreshToken", refreshTokenOptions)
     .json(new ApiResponse(200, null, "Company Logged Out Successfully"));
 });
 
