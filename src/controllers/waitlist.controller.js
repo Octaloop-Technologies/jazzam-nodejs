@@ -74,6 +74,7 @@ const joinWaitlist = asyncHandler(async (req, res) => {
       )
     );
   } catch (error) {
+    console.log("error join wait list***",error)
     if (error.name === "ValidationError") {
       const messages = Object.values(error.errors).map((err) => err.message);
       throw new ApiError(400, `Validation error: ${messages.join(", ")}`);

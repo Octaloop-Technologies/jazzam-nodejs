@@ -165,6 +165,7 @@ class EmailService {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
+      console.log("error 1*****", error)
       console.error("❌ Failed to send waitlist notification:", error.message);
       return {
         success: false,
