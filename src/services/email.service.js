@@ -50,7 +50,9 @@ class EmailService {
 
         // Create transporter with secure configuration
         this.#transporter = nodemailer.createTransport({
-          service: "gmail",
+          host: "smtp.hostinger.com",
+          port: 465,
+          service: "hostinger",
           auth: {
             user: process.env.EMAIL_COMPANY,
             pass: process.env.EMAIL_APP_PASSWORD,
@@ -642,6 +644,7 @@ class EmailService {
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
           .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header-ar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
           .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
           .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
           .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
@@ -674,6 +677,32 @@ class EmailService {
           <div class="footer">
             <p>You're receiving this email because you joined our waitlist.</p>
           </div>
+          <hr style="margin: 30px 0; border: 1px solid #eee;">
+          <div class="header-ar">
+            <h1> أهلاً وسهلاً بك في قائمة الانتظار!</h1>
+          </div>
+          <div class="content" dir="rtl" style="text-align: right; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+            <p>مرحبًا ${displayName}،</p>
+                <p>شكرًا لانضمامك إلى قائمة الانتظار الخاصة بنا! يسعدنا جدًا وجودك معنا.</p>
+                
+                <p>ستكون من أوائل الأشخاص الذين يعرفون عن إطلاق منصتنا لتوليد العملاء المحتملين. نحن نعمل على بناء أداة مذهلة ستساعد الشركات على الحصول على عملاء بجودة عالية من مختلف منصات التواصل الاجتماعي.</p>
+                
+                <p><strong>وش تتوقع بعد التسجيل:</strong></p>
+                <ul style="list-style-position: inside; padding-right: 0;">
+                  <li>وصول مبكر لتجربة المنصة</li>
+                  <li>عروض حصرية عند الإطلاق</li>
+                  <li>تحديثات مستمرة عن تقدم المشروع</li>
+                  <li>أولوية في الدعم الفني وقت الإطلاق</li>
+                </ul>
+                
+                <p>راح نوافيك أول بأول بالتطورات، ونتواصل معك فور ما تكون المنصة جاهزة للإطلاق.</p>
+                
+                <p>تحياتنا،<br>فريق جزّام</p>
+          </div>
+          <div class="footer" dir="rtl" style="text-align: center; direction: rtl; font-size: 12px; color: #777;">
+            <p>أنت تتلقى هذا البريد الإلكتروني لأنك انضممت إلى قائمة الانتظار لدينا.</p>
+          </div>
+          
         </div>
       </body>
       </html>

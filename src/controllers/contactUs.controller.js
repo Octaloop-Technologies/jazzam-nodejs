@@ -7,7 +7,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 const contactUs = asyncHandler(async (req, res) => {
     try {
-        const { name, email, companyName, message } = req.body;
+        const { name, email, companyName, message } = req.body.data;
 
         if (!email) {
             throw new ApiError(400, "Email is required");
