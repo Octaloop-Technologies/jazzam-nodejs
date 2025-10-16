@@ -278,17 +278,15 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // clear cookies
     res.clearCookie("accessToken", {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: ".jazzam.ai",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     path: "/",
   });
 
   res.clearCookie("refreshToken", {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: ".jazzam.ai",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     path: "/",
   });
 
