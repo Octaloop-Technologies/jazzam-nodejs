@@ -36,30 +36,30 @@ const joinWaitlist = asyncHandler(async (req, res) => {
     });
 
     // Send notification email to company
-    try {
-      await emailService.sendWaitlistNotification(sanitizedEmail, {
-        name: name || "Not provided",
-        source: source,
-        signupTime: new Date().toISOString(),
-        userAgent: req.get("User-Agent") || "Unknown",
-        ipAddress: req.ip || req.connection.remoteAddress || "Unknown",
-        ...metadata,
-      });
-    } catch (emailError) {
-      console.error("Failed to send notification email:", emailError);
-      // Don't fail the request if email fails
-    }
+    // try {
+    //   await emailService.sendWaitlistNotification(sanitizedEmail, {
+    //     name: name || "Not provided",
+    //     source: source,
+    //     signupTime: new Date().toISOString(),
+    //     userAgent: req.get("User-Agent") || "Unknown",
+    //     ipAddress: req.ip || req.connection.remoteAddress || "Unknown",
+    //     ...metadata,
+    //   });
+    // } catch (emailError) {
+    //   console.error("Failed to send notification email:", emailError);
+    //   // Don't fail the request if email fails
+    // }
 
     // Send confirmation email to user
-    try {
-      await emailService.sendWaitlistConfirmation(
-        sanitizedEmail,
-        name || sanitizedEmail
-      );
-    } catch (emailError) {
-      console.error("Failed to send confirmation email:", emailError);
-      // Don't fail the request if email fails
-    }
+    // try {
+    //   await emailService.sendWaitlistConfirmation(
+    //     sanitizedEmail,
+    //     name || sanitizedEmail
+    //   );
+    // } catch (emailError) {
+    //   console.error("Failed to send confirmation email:", emailError);
+    //   // Don't fail the request if email fails
+    // }
 
     return res.status(201).json(
       new ApiResponse(
