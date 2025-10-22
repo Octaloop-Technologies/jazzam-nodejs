@@ -19,6 +19,7 @@ import {
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import passport from "../config/passport.js";
+import { handleOAuthCallback } from "../controllers/crmIntegration.controller.js";
 
 const router = Router();
 
@@ -49,7 +50,8 @@ router.route("/auth/google/callback").get(
 
 // GET /api/v1/companies/auth/zoho
 router.route("/auth/zoho").get(zohoLogin);
-router.route("/auth/zoho/callback").get(zohoCallback);
+router.route("/auth/login/zoho/callback").get(zohoCallback);
+router.route("/auth/zoho/callback").get(handleOAuthCallback)
 
 // POST /api/v1/companies/auth/refresh-token
 router.route("/auth/refresh-token").post(refreshAccessToken);
