@@ -119,12 +119,16 @@ const initOAuthFlow = asyncHandler(async (req, res) => {
  * @route GET /api/v1/crm-integration/oauth/callback/:provider
  */
 const handleOAuthCallback = asyncHandler(async (req, res) => {
-  const { provider } = req.params;
-  const { code, state, error, error_description } = req.query;
+  // console.log("this is called.......");
+  // const { provider } = req.params;
+  const { code, state, error, error_description, provider } = req.query;
+
+  const crmProvider = req.params?.provider ? req.params?.provider : provider;
+  // console.log("crm provider*******", crmProvider)
 
   // Handle OAuth errors
   if (error) {
-    console.error(`OAuth error for ${provider}:`, error_description);
+    console.error(`OAuth error for ${crmProvider}:`, error_description);
     return res.redirect(
       `${process.env.CLIENT_URL}/super-user/settings?integration=failed&error=${encodeURIComponent(error_description || error)}`
     );
@@ -138,7 +142,7 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
 
   try {
     // Exchange code for tokens (this also validates and returns state data)
-    const tokenData = await exchangeCodeForToken(provider, code, state);
+    const tokenData = await exchangeCodeForToken(crmProvider, code, state);
 
     // The state is validated inside exchangeCodeForToken, but we need to extract companyId
     // We need to get it from the token exchange response which includes state data
@@ -147,7 +151,7 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
 
     // Prepare credentials based on provider
     let credentials = {};
-    switch (provider) {
+    switch (crmProvider) {
       case "zoho":
         credentials = {
           apiDomain: tokenData.apiDomain,
@@ -178,7 +182,7 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
 
     // Test connection
     const connectionTest = await testCrmConnectionApi(
-      provider,
+      crmProvider,
       tokenData.accessToken,
       credentials
     );
@@ -193,7 +197,7 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
     // Create CRM integration
     const crmIntegration = await CrmIntegration.create({
       companyId,
-      provider,
+      provider:crmProvider,
       status: "active",
       credentials,
       tokens: {
@@ -210,12 +214,12 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
     });
 
     console.log(
-      `CRM integration created for company ${companyId} with ${provider}`
+      `CRM integration created for company ${companyId} with ${crmProvider}`
     );
 
     // Redirect to success page
     return res.redirect(
-      `${process.env.CLIENT_URL}/super-user/settings?integration=success&provider=${provider}`
+      `${process.env.CLIENT_URL}/super-user/settings?integration=success&provider=${crmProvider}`
     );
   } catch (error) {
     console.error("OAuth callback error:", error);

@@ -391,8 +391,15 @@ const zohoLoginCallback = asyncHandler(async (req, res) => {
 
 const zohoLogin = asyncHandler(async (req, res) => {
   try {
-    // Redirect to Zoho OAuth
-    const authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
+    const { type } = req.query;
+    let authUrl;
+    if(type === 'login'){
+      // Redirect to Zoho OAuth
+      authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_LOGIN_REDIRECT_URI}`;
+    }else{
+      authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL,ZohoCRM.settings.ALL,ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
+    }
+
 
     return res.redirect(authUrl);
   } catch (error) {
@@ -424,7 +431,7 @@ const zohoCallback = asyncHandler(async (req, res) => {
           grant_type: "authorization_code",
           client_id: process.env.ZOHO_CLIENT_ID,
           client_secret: process.env.ZOHO_CLIENT_SECRET,
-          redirect_uri: process.env.ZOHO_REDIRECT_URI,
+          redirect_uri: process.env.ZOHO_LOGIN_REDIRECT_URI,
           code: code,
         }),
       }
@@ -457,6 +464,8 @@ const zohoCallback = asyncHandler(async (req, res) => {
     });
 
     const userData = await userResponse.json();
+
+    console.log("usersData************", userData);
 
     if (
       !userData.users ||
