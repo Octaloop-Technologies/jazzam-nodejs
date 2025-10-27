@@ -4,6 +4,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { Lead } from "../models/lead.model.js";
 import mongoose from "mongoose";
 import bantService from "../services/bant.service.js";
+import FollowUp from "../models/followUp.model.js";
+import emailService from "../services/email.service.js";
 
 // ==============================================================
 // Lead Controller Functions
@@ -423,6 +425,50 @@ const deleteLead = asyncHandler(async (req, res) => {
   }
 });
 
+// Follow up email for lead
+const followUpEmail = asyncHandler(async (req, res) => {
+  try {
+    const leadId = req.params?.id
+    const lead = await Lead.findById(leadId);
+    const findLead = await FollowUp.findOne({ leadId });
+    const result = await emailService.sendFollowUpEmail(lead);
+    if (result.success === true) {
+      findLead.status = "submitted";
+      await findLead.save();
+      return
+    }
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, result, "Follow up email sent successfully")
+      );
+
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed send follow up email"
+    );
+  }
+});
+
+const followUpLeads = asyncHandler(async (req, res) => {
+  try {
+    const followupLeadsData = await FollowUp.find();
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, followupLeadsData, "All follow up leads sent")
+      );
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get follow up leads"
+    );
+  }
+})
+
 // ==============================================================
 // BANT Qualification Functions
 // ==============================================================
@@ -597,4 +643,6 @@ export {
   deleteLead,
   qualifyLeadBANT,
   batchQualifyLeadsBANT,
+  followUpEmail,
+  followUpLeads
 };

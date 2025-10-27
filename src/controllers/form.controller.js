@@ -8,6 +8,7 @@ import scrapingService from "../services/scraping.service.js";
 import emailService from "../services/email.service.js";
 import bantService from "../services/bant.service.js";
 import { syncLeadToCrm } from "../services/crm/sync.service.js";
+import FollowUp from "../models/followUp.model.js";
 
 // ==============================================================
 // Form Management Functions
@@ -440,6 +441,14 @@ const submitFormData = asyncHandler(async (req, res) => {
       };
 
       const lead = await Lead.create(leadData);
+
+      // create follow up for lead
+      const followUpLeadData = {
+        leadId: lead?._id,
+        channel: "email",
+        status: "pending"
+      }
+      await FollowUp.create(followUpLeadData);
 
       // Send welcome email to lead if enabled and lead has email
       if (form.settings.autoResponse.enabled && lead.email) {

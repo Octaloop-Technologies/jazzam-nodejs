@@ -10,6 +10,8 @@ import {
   deleteLead,
   qualifyLeadBANT,
   batchQualifyLeadsBANT,
+  followUpEmail,
+  followUpLeads,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -29,6 +31,10 @@ router.use(verifyJWT);
 // Get all leads with pagination, filtering, and sorting
 // GET /api/v1/lead/all?page=1&limit=10&status=hot&industry=Technology
 router.route("/all").get(getLeads);
+
+// Get all follow up leads
+// GET /api/lead/follow-up-leads
+router.route("/follow-up-leads").get(followUpLeads)
 
 // Search leads by text query
 // GET /api/v1/lead/search?query=john&page=1&limit=10&status=warm
@@ -62,5 +68,8 @@ router.route("/:id/status").patch(updateLeadStatus);
 // Soft delete a lead
 // DELETE /api/v1/lead/:id
 router.route("/:id").delete(deleteLead);
+
+// lead follow up email
+router.route("/follow-up/:id").post(followUpEmail)
 
 export default router;
