@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import fetch from "node-fetch";
+import { deleteCodeVerifier, getCodeVerifier, storeCodeVerifier } from "../../utils/quick-storage.js";
 
 /**
  * CRM OAuth2 Service
@@ -25,6 +26,7 @@ const CRM_CONFIGS = {
     revokeUrl: "https://login.salesforce.com/services/oauth2/revoke",
     scope: "api refresh_token offline_access",
     responseType: "code",
+    requiresPKCE: true
   },
   hubspot: {
     authUrl: "https://app.hubspot.com/oauth/authorize",
@@ -96,6 +98,17 @@ const verifyState = (state) => {
 // OAuth2 URL Generation
 // ============================================
 
+// Helper function to generate PKCE parameters
+const generatePKCE = () => {
+  const codeVerifier = crypto.randomBytes(32).toString('base64url');
+  const codeChallenge = crypto
+    .createHash('sha256')
+    .update(codeVerifier)
+    .digest('base64url');
+  
+  return { codeVerifier, codeChallenge };
+};
+
 /**
  * Generate OAuth2 authorization URL
  */
@@ -131,6 +144,16 @@ export const generateAuthUrl = (provider, companyId) => {
   // Add provider-specific parameters
   if (provider === "zoho") {
     params.append("access_type", config.accessType);
+  }
+
+   // Generate PKCE parameters for Salesforce
+  if (config.requiresPKCE) {
+    const pkce = generatePKCE();
+    storeCodeVerifier(state, pkce.codeVerifier)
+    params.append("code_challenge", pkce.codeChallenge);
+    params.append("code_challenge_method", "S256");
+    
+    console.log(`🔐 PKCE enabled for ${provider}`);
   }
 
   return {
@@ -177,6 +200,20 @@ export const exchangeCodeForToken = async (provider, code, state) => {
     redirect_uri: redirectUri,
     code,
   });
+
+  // Add code_verifier for PKCE providers
+  if (config.requiresPKCE) {
+    const codeVerifier = getCodeVerifier(state); // Get from storage
+    
+    if (!codeVerifier) {
+      throw new Error('Code verifier not found');
+    }
+    
+    params.append('code_verifier', codeVerifier); // Use params.append instead of tokenData
+    
+    // Clean up
+    deleteCodeVerifier(state);
+  }
 
   try {
     const response = await fetch(config.tokenUrl, {

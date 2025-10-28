@@ -276,14 +276,14 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
 
   // clear cookies
-    res.clearCookie("accessToken", {
+    res.cookie("accessToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
   });
 
-  res.clearCookie("refreshToken", {
+  res.cookie("refreshToken",'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

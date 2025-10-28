@@ -50,7 +50,8 @@ class EmailService {
 
         // Create transporter with secure configuration
         this.#transporter = nodemailer.createTransport({
-          service: "gmail",
+          host: 'smtp.hostinger.com',
+          port: 465, // or 587
           auth: {
             user: process.env.EMAIL_COMPANY,
             pass: process.env.EMAIL_APP_PASSWORD,
@@ -461,11 +462,11 @@ class EmailService {
 
   // Build mail options for follow-up email
   #buildFollowUpMailOptions(lead, form) {
-    const companyName = form.companyId?.companyName || "Our Company";
+    const companyName = form?.companyId?.companyName || "Our Company";
     const subject =
-      form.settings?.followUp?.subject || "Following up on your inquiry";
+      form?.settings?.followUp?.subject || "Following up on your inquiry";
     const message =
-      form.settings?.followUp?.message ||
+      form?.settings?.followUp?.message ||
       "Hi there! We wanted to follow up on your recent inquiry. Do you have any questions?";
 
     return {
