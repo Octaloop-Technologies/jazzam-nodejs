@@ -59,9 +59,10 @@ const handleSuccessfulOAuth = async (
     console.log("OAuth redirectUrl:", redirectUrl);
     console.log("accessToken:", accessToken);
     console.log("refreshToken:", refreshToken);
-    res.cookie('accessToken', accessToken, securityConfig.session.cookie);
 
-    res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
+    // Set cookies with proper options
+    res.cookie('accessToken', accessToken, getAccessTokenCookieOptions());
+    res.cookie('refreshToken', refreshToken, getRefreshTokenCookieOptions());
 
     return res.redirect(redirectUrl);
 
@@ -239,6 +240,11 @@ const loginCompany = asyncHandler(async (req, res) => {
 
   const needsPlanSelection = !hasSelectedPlan;
 
+  // Debug cookie options
+  console.log("Cookie options:", getAccessTokenCookieOptions());
+  console.log("NODE_ENV:", process.env.NODE_ENV);
+  console.log("CLIENT_URL:", process.env.CLIENT_URL);
+
   // Set access and refresh token in cookie
   return res
     .status(200)
@@ -277,20 +283,9 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // const accessTokenOptions = getClearAccessTokenCookieOptions();
   // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
   console.log("Clearing cookies", process.env.NODE_ENV);
-  // clear cookies
-  res.cookie("accessToken", 'none', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
-
-  res.cookie("refreshToken", 'none', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+  // Clear cookies with proper options
+  res.clearCookie("accessToken", getClearAccessTokenCookieOptions());
+  res.clearCookie("refreshToken", getClearRefreshTokenCookieOptions());
 
   // send response
   return res

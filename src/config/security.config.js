@@ -18,7 +18,7 @@ export const securityConfig = {
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     domain:
       process.env.NODE_ENV === "production"
-        ? process.env.COOKIE_DOMAIN || "jazzam-frontend-env-test-octalooptechnologies-projects.vercel.app"
+        ? process.env.COOKIE_DOMAIN || undefined // Let browser handle domain automatically
         : undefined, // Don't set domain in development - let browser handle it
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
@@ -94,7 +94,7 @@ export const securityConfig = {
       domain:
         process.env.NODE_ENV === "production"
           ? process.env.COOKIE_DOMAIN || undefined
-          : "localhost",
+          : undefined,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
     },
   },
