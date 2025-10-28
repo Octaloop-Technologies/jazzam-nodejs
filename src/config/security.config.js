@@ -15,10 +15,10 @@ export const securityConfig = {
   cookies: {
     httpOnly: process.env.NODE_ENV === "production" ? true : false,
     secure: process.env.NODE_ENV === "production" ? true : false,
-    sameSite:process.env.NODE_ENV === "production" ? "none" : "lax",  
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     domain:
       process.env.NODE_ENV === "production"
-        ? process.env.COOKIE_DOMAIN || ".jazzam.ai" // Default to .jazzam.ai if not set
+        ? process.env.COOKIE_DOMAIN || ".vercel.app" // Default to .jazzam.ai if not set
         : undefined, // Don't set domain in development - let browser handle it
     maxAge: {
       accessToken: 30 * 60 * 1000, // 30 minutes
