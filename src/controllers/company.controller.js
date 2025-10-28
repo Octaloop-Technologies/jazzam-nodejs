@@ -57,6 +57,8 @@ const handleSuccessfulOAuth = async (
       path: redirectPath,
     });
     console.log("OAuth redirectUrl:", redirectUrl);
+    console.log("accessToken:", accessToken);
+    console.log("refreshToken:", refreshToken);
     res.cookie('accessToken', accessToken, securityConfig.session.cookie);
 
     res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
