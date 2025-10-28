@@ -140,9 +140,9 @@ const registerCompany = asyncHandler(async (req, res) => {
     contactPerson,
     logo: logo
       ? {
-          url: logo.url,
-          public_id: logo.public_id,
-        }
+        url: logo.url,
+        public_id: logo.public_id,
+      }
       : null,
   });
 
@@ -274,16 +274,16 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // Get cookie options for clearing cookies
   // const accessTokenOptions = getClearAccessTokenCookieOptions();
   // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
-
+  console.log("Clearing cookies", process.env.NODE_ENV);
   // clear cookies
-    res.cookie("accessToken", 'none', {
+  res.cookie("accessToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
   });
 
-  res.cookie("refreshToken",'none', {
+  res.cookie("refreshToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -393,10 +393,10 @@ const zohoLogin = asyncHandler(async (req, res) => {
   try {
     const { type } = req.query;
     let authUrl;
-    if(type === 'login'){
+    if (type === 'login') {
       // Redirect to Zoho OAuth
       authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_LOGIN_REDIRECT_URI}`;
-    }else{
+    } else {
       authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL,ZohoCRM.settings.ALL,ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
     }
 
