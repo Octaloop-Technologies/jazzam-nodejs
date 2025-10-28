@@ -56,7 +56,7 @@ const handleSuccessfulOAuth = async (
     const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
       path: redirectPath,
     });
-
+    console.log("OAuth redirectUrl:", redirectUrl);
     res.cookie('accessToken', accessToken, securityConfig.session.cookie);
 
     res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
