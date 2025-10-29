@@ -50,7 +50,7 @@ const handleSuccessfulOAuth = async (
 
     const redirectPath = needsPlanSelection
       ? "/super-user/subscription"
-      : "/super-user";
+      : "/dashboard";
 
     // Generate redirect URL with provider info
     const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {

@@ -319,6 +319,49 @@ class EmailService {
     }
   }
 
+  async sendInvitationEmail(name, email, link){
+        try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
+      if (!this.#isInitialized) {
+        console.warn(
+          "⚠️ Email service not initialized. Skipping invitation link email."
+        );
+        return {
+          success: false,
+          message: "Email service not available",
+          recipient: email,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Validate input parameters
+      this.#validateEmailAddress(email);
+
+      const mailOptions = this.#buildInvitationEmailOptions(email,link, name);
+      const emailResult = await this.#sendEmail(mailOptions);
+
+      console.log(
+        `✅ Invitation email sent successfully to ${email}: ${emailResult.messageId}`
+      );
+      return {
+        success: true,
+        messageId: emailResult.messageId,
+        recipient: email,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ Failed to send invitation email:", error.message);
+      return {
+        success: false,
+        message: error.message,
+        recipient: email,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
   // ================================================
   // Send notification email to company about new lead
   // ================================================
@@ -460,6 +503,8 @@ class EmailService {
     };
   }
 
+
+
   // Build mail options for follow-up email
   #buildFollowUpMailOptions(lead, form) {
     const companyName = form?.companyId?.companyName || "Our Company";
@@ -480,6 +525,26 @@ class EmailService {
       priority: "normal",
     };
   }
+
+
+  // Build mail options for follow-up email
+  #buildInvitationEmailOptions(receiverEmail, link, name) {
+    const companyName = "Our Company";
+    const subject = "Invitation Link";
+    const message = "I'm excited to invite you to join our company. Here's your personal invitation link:";
+
+    return {
+      from: {
+        name: companyName,
+        address: process.env.EMAIL_COMPANY,
+      },
+      to: receiverEmail,
+      subject: subject,
+      html: this.#generateInvitationLinkTemplate(link, companyName, message, name),
+      priority: "normal",
+    };
+  }
+  
 
   // Build mail options for lead notification email
   #buildLeadNotificationMailOptions(lead, form, company) {
@@ -538,6 +603,35 @@ class EmailService {
         </div>
         <div class="footer">
           <p>This email was sent to ${lead.email}</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  #generateInvitationLinkTemplate(link, companyName, message, name) {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome from </title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
+          .content { padding: 20px; background-color: #ffffff; border: 1px solid #e9ecef; border-radius: 8px; }
+          .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6c757d; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+        </div>
+        <div class="content">
+          <p>Hi ${name} ,</p>
+          <p>${message}</p>
+          <p>${link}</p>
+          <p>Best regards,<br>The ${companyName} Team</p>
         </div>
       </body>
       </html>

@@ -153,7 +153,8 @@ import leadRouter from "./routes/lead.routes.js";
 import crmIntegrationRouter from "./routes/crmIntegration.routes.js";
 import waitlistRouter from "./routes/waitlist.routes.js";
 import subscriptionRouter from "./routes/subscription.routes.js";
-import contactRouter from "./routes/contactUs.routes.js"
+import contactRouter from "./routes/contactUs.routes.js";
+import invitationRoute from "./routes/invitation.routes.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -170,6 +171,7 @@ app.use("/api/v1/crm-integration", crmIntegrationRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
 app.use("/api/v1/billing", subscriptionRouter);
 app.use("/api/v1/contact", contactRouter)
+app.use("/api/v1/invite", invitationRoute)
 
 // ==========================================================
 // Error handling middleware (must be last)
