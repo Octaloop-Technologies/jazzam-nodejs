@@ -10,13 +10,25 @@ const FollowUpLead = new mongoose.Schema({
         type: String,
         default: "email"
     },
+    subject: {
+        type: String,
+        default: ""
+    },
+    message: {
+        type: String,
+        default: ""
+    },
     status: {
-        enum: ["submitted", "schedules", "pending"],
+        enum: ["submitted", "scheduled", "pending"],
         type: String,
         default: "pending"
     },
     scheduleDate: {
         type: Date,
+    },
+    scheduled: {
+        type: Boolean,
+        default: false
     },
     dateOfSubmission: {
         type: Date,

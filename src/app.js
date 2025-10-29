@@ -24,6 +24,8 @@ import {
   swaggerUi,
   swaggerUiOptions,
 } from "./config/swagger-simple.config.js";
+import cron from "node-cron";
+import { scheduledLeads } from "./controllers/lead.controller.js";
 
 const app = express();
 
@@ -43,6 +45,12 @@ app.use(
 app.use(securityHeaders); // Custom security headers
 app.use(cors(corsOptions)); // CORS configuration
 app.use(generalRateLimit); // General rate limiting
+
+// cron job for followup scheduling
+cron.schedule("0 0 * * *", scheduledLeads, {
+  scheduled: true,
+  timezone: "Asia/Riyadh"
+})
 
 // Raw body for Stripe webhooks (before JSON parsing)
 app.use(
@@ -89,10 +97,10 @@ app.get("/", (req, res) => {
     ...(isProduction
       ? {}
       : {
-          version: "1.0.0",
-          timestamp: new Date().toISOString(),
-          environment: process.env.NODE_ENV || "development",
-        }),
+        version: "1.0.0",
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || "development",
+      }),
     apiDocumentation: isProduction ? null : "/api-docs-legacy",
   };
 
@@ -145,7 +153,7 @@ import leadRouter from "./routes/lead.routes.js";
 import crmIntegrationRouter from "./routes/crmIntegration.routes.js";
 import waitlistRouter from "./routes/waitlist.routes.js";
 import subscriptionRouter from "./routes/subscription.routes.js";
-import contactRouter from "./routes/contactUs.routes.js" 
+import contactRouter from "./routes/contactUs.routes.js"
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically

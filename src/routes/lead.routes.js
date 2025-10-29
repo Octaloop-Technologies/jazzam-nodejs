@@ -12,6 +12,7 @@ import {
   batchQualifyLeadsBANT,
   followUpEmail,
   followUpLeads,
+  scheduleFollowUpLeads,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -71,5 +72,8 @@ router.route("/:id").delete(deleteLead);
 
 // lead follow up email
 router.route("/follow-up/:id").post(followUpEmail)
+
+// schedule followup lead
+router.route("/schedule-follow-up/:id").post(scheduleFollowUpLeads) 
 
 export default router;

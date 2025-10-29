@@ -452,6 +452,7 @@ const followUpEmail = asyncHandler(async (req, res) => {
   }
 });
 
+// get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
     const followupLeadsData = await FollowUp.find();
@@ -468,6 +469,86 @@ const followUpLeads = asyncHandler(async (req, res) => {
     );
   }
 })
+
+// schedule follow up lead
+const scheduleFollowUpLeads = asyncHandler(async (req, res) => {
+  try {
+    const leadId = req?.params?.id;
+    const { date, subject, message } = req.body;
+    const scheduleDate = new Date(date);
+    const followupLeadsData = await FollowUp.findOne({ leadId });
+    if (!followupLeadsData) {
+      return res
+        .status(400)
+        .json(
+          new ApiResponse(200, followupLeadsData, "lead not found.")
+        );
+    }
+    followupLeadsData.status = "scheduled";
+    followupLeadsData.scheduleDate = scheduleDate;
+    followupLeadsData.subject = subject;
+    followupLeadsData.message = message;
+    followupLeadsData.scheduled = true;
+    await followupLeadsData.save();
+
+    console.log("follow up lead********", followupLeadsData)
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, {}, "Lead scheduled successfully")
+      );
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get follow up leads"
+    );
+  }
+});
+
+// cron job function for scheduled follow up leads
+
+const scheduledLeads = async () => {
+    console.log("🕛 Running daily follow-up email cron job:", new Date().toISOString());
+
+    try {
+    // 1️⃣ Get all follow-ups that are due today and not yet scheduled
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const followUps = await FollowUp.find({
+      status: { $in: ["scheduled"] },
+      scheduleDate: { $gte: todayStart, $lte: todayEnd },
+      scheduled: true
+    }).populate("leadId");
+
+    console.log(`📩 Found ${followUps.length} follow-up emails to send`);
+
+    // 2️⃣ Send emails one by one
+    for (const followUp of followUps) {
+      try {
+        await emailService.sendFollowUpEmail(followUp.leadId);
+        
+        // 3️⃣ Update status and mark as scheduled
+        followUp.status = "submitted";
+        followUp.scheduled = true;
+        followUp.dateOfSubmission = new Date();
+        await followUp.save();
+
+        console.log(`✅ Email sent for lead: ${followUp.leadId}`);
+      } catch (err) {
+        console.error(`❌ Failed to send email for lead: ${followUp.leadId}`, err);
+      }
+    }
+
+  } catch (error) {
+    console.error("❌ Error in follow-up email cron job:", error);
+  }
+}
+
+
 
 // ==============================================================
 // BANT Qualification Functions
@@ -644,5 +725,7 @@ export {
   qualifyLeadBANT,
   batchQualifyLeadsBANT,
   followUpEmail,
-  followUpLeads
+  followUpLeads,
+  scheduleFollowUpLeads,
+  scheduledLeads
 };
