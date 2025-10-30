@@ -444,6 +444,7 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       // create follow up for lead
       const followUpLeadData = {
+        companyId: form.companyId,
         leadId: lead?._id,
         channel: "email",
         status: "pending"

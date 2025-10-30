@@ -24,10 +24,15 @@ const getLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
+    companyId
   } = req.query;
 
-  // Build match conditions - always filter by company
-  const matchConditions = { companyId: req.company._id };
+
+  // Build match conditions - prefer query param, fallback to req.company._id
+  const matchConditions = {
+    companyId: companyId || req.company._id
+  };
+
 
   if (status) matchConditions.status = status;
   if (formId)
@@ -182,6 +187,7 @@ const searchLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
+    companyId
   } = req.query;
 
   if (!query || query.trim().length === 0) {
@@ -190,7 +196,7 @@ const searchLeads = asyncHandler(async (req, res) => {
 
   // Build match conditions - always filter by company
   const matchConditions = {
-    companyId: req.company._id,
+    companyId: companyId ?? req.company._id,
     $text: { $search: query.trim() },
   };
 
@@ -291,7 +297,7 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
 // Get lead statistics
 const getLeadStats = asyncHandler(async (req, res) => {
   try {
-    const companyId = req.company._id;
+    const companyId = req.query?.companyId ?? req.company._id;
 
     const stats = await Lead.aggregate([
       { $match: { companyId, status: { $ne: null } } },
@@ -455,7 +461,8 @@ const followUpEmail = asyncHandler(async (req, res) => {
 // get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
-    const followupLeadsData = await FollowUp.find();
+    const companyId = req.params?.id;
+    const followupLeadsData = await FollowUp.find({ companyId }).populate("leadId", "profilePic fullName company email");
     return res
       .status(200)
       .json(
@@ -509,9 +516,9 @@ const scheduleFollowUpLeads = asyncHandler(async (req, res) => {
 // cron job function for scheduled follow up leads
 
 const scheduledLeads = async () => {
-    console.log("🕛 Running daily follow-up email cron job:", new Date().toISOString());
+  console.log("🕛 Running daily follow-up email cron job:", new Date().toISOString());
 
-    try {
+  try {
     // 1️⃣ Get all follow-ups that are due today and not yet scheduled
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -530,7 +537,7 @@ const scheduledLeads = async () => {
     for (const followUp of followUps) {
       try {
         await emailService.sendFollowUpEmail(followUp.leadId);
-        
+
         // 3️⃣ Update status and mark as scheduled
         followUp.status = "submitted";
         followUp.scheduled = true;

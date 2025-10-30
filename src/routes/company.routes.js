@@ -15,6 +15,7 @@ import {
   updateCompanyLogo,
   updateSubscriptionStatus,
   updateSettings,
+  getCompanyDashboard,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -64,6 +65,9 @@ router.use(verifyJWT);
 
 // POST /api/v1/companies/auth/logout
 router.route("/auth/logout").post(logoutCompany);
+
+// GET /api/v1/auth/companies/:id
+router.route("/:id").get(getCompanyDashboard)
 
 // POST /api/v1/companies/auth/change-password
 router.route("/auth/change-password").post(changeCurrentPassword);

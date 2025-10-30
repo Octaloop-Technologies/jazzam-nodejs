@@ -35,7 +35,7 @@ router.route("/all").get(getLeads);
 
 // Get all follow up leads
 // GET /api/lead/follow-up-leads
-router.route("/follow-up-leads").get(followUpLeads)
+router.route("/follow-up-leads/:id").get(followUpLeads)
 
 // Search leads by text query
 // GET /api/v1/lead/search?query=john&page=1&limit=10&status=warm

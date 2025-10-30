@@ -98,6 +98,50 @@ const generateAccessAndRefreshToken = async (companyId) => {
   }
 };
 
+// ==============================================================
+// Get Company dashboard
+// ==============================================================
+
+const getCompanyDashboard = asyncHandler(async (req, res) => {
+  try {
+    const companyId  = req.params.id; // from auth
+
+    const company = await Company.findById(companyId)
+      .populate("joinedCompanies", "_id companyName email logo.url")
+      .lean();
+
+      console.log("company******", company)
+
+    if (!company) return res.status(404).json({ message: "Company not found" });
+
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          {
+            ownCompany: {
+              _id: company._id,
+              name: company.companyName,
+              email: company.email,
+              logo: company?.logo?.url
+            },
+            joinedCompanies: {
+              _id: company.joinedCompanies._id,
+              name: company.joinedCompanies.companyName,
+              email: company.joinedCompanies.email,
+              logo: company.joinedCompanies.logo?.url
+            }
+          },
+          "User companies retrieved successfully"
+        )
+      );
+
+  } catch (error) {
+    throw new ApiError(500, "Error while calling function for get dashboard");
+  }
+})
+
 const registerCompany = asyncHandler(async (req, res) => {
   const { companyName, email, password, website, industry, contactPerson } =
     req.body;
@@ -140,9 +184,9 @@ const registerCompany = asyncHandler(async (req, res) => {
     contactPerson,
     logo: logo
       ? {
-          url: logo.url,
-          public_id: logo.public_id,
-        }
+        url: logo.url,
+        public_id: logo.public_id,
+      }
       : null,
   });
 
@@ -276,14 +320,14 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
 
   // clear cookies
-    res.cookie("accessToken", 'none', {
+  res.cookie("accessToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
   });
 
-  res.cookie("refreshToken",'none', {
+  res.cookie("refreshToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -393,10 +437,10 @@ const zohoLogin = asyncHandler(async (req, res) => {
   try {
     const { type } = req.query;
     let authUrl;
-    if(type === 'login'){
+    if (type === 'login') {
       // Redirect to Zoho OAuth
       authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_LOGIN_REDIRECT_URI}`;
-    }else{
+    } else {
       authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL,ZohoCRM.settings.ALL,ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
     }
 
@@ -751,6 +795,7 @@ const updateSettings = asyncHandler(async (req, res) => {
 
 export {
   registerCompany,
+  getCompanyDashboard,
   loginCompany,
   googleLoginCallback,
   zohoLoginCallback,

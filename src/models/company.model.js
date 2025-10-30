@@ -224,12 +224,11 @@ const companySchema = new Schema(
       type: Number,
       default: 1, // Owner counts as 1 seat
     },
-    joinedCompanies: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Company",
-      },
-    ],
+    joinedCompanies:
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+    },
     teamMembers: [
       {
         company: {
