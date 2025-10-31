@@ -69,6 +69,7 @@ const acceptInvitation = asyncHandler(async(req, res) => {
 
   // Add sender to receiver's joinedCompanies
   receiver.joinedCompanies.push(sender._id);
+  receiver.joinedCompanyStatus = true
   await receiver.save();
 
   // Mark invitation as accepted

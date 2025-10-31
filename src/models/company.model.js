@@ -229,6 +229,10 @@ const companySchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
     },
+    joinedCompanyStatus:{
+      type: Boolean,
+      default: false
+    },
     teamMembers: [
       {
         company: {

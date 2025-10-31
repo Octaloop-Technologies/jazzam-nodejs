@@ -50,7 +50,7 @@ const handleSuccessfulOAuth = async (
 
     const redirectPath = needsPlanSelection
       ? "/super-user/subscription"
-      : "/dashboard";
+      : "/super-user";
 
     // Generate redirect URL with provider info
     const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
@@ -104,13 +104,13 @@ const generateAccessAndRefreshToken = async (companyId) => {
 
 const getCompanyDashboard = asyncHandler(async (req, res) => {
   try {
-    const companyId  = req.params.id; // from auth
+    const companyId = req.params.id; // from auth
 
     const company = await Company.findById(companyId)
       .populate("joinedCompanies", "_id companyName email logo.url")
       .lean();
 
-      console.log("company******", company)
+    console.log("company******", company)
 
     if (!company) return res.status(404).json({ message: "Company not found" });
 
@@ -793,6 +793,106 @@ const updateSettings = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, company, "Settings updated successfully"));
 });
 
+
+// get team members assigned 
+const companyTeamsMembers = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url");
+    return res.status(200).json({ success: true, message: "Team members retrieved successfully", data: company });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+});
+
+const deactivateTeamMember = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const memberCompany = await Company.findById(id);
+    memberCompany.joinedCompanyStatus = false;
+    await memberCompany.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Team member status deactivated successfully",
+    });
+
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to delete team member"
+    );
+  }
+});
+
+const activateTeamMember = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const memberCompany = await Company.findById(id);
+    memberCompany.joinedCompanyStatus = true;
+    await memberCompany.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Team member status activated successfully",
+    });
+
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to delete team member"
+    );
+  }
+});
+
+
+const getJoinedCompany = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.company?._id;
+    const company = await Company.findOne({ _id: id }, { email: 1, companyName: 1 }).populate("joinedCompanies", "_id email companyName logo.url joinedCompanyStatus")
+    if (company) {
+      return res.status(200).json({ success: true, message: "Joined company data retrieved successfully", data: company });
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+});
+
+const changeCompanyName = asyncHandler(async (req, res) => {
+  console.log("suskksks", req.body);
+    const companyId = req.company?._id;
+    console.log("companyId", companyId);
+  try {
+    const { companyName } = req.body;
+    const companyId = req.company?._id;
+    if(companyId){
+      const company = await Company.findById(companyId);
+      company.companyName = companyName;
+      await company.save();
+      return res.status(201).json({ success: true, message: "Company name changed successfully" })
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+})
+
 export {
   registerCompany,
   getCompanyDashboard,
@@ -811,4 +911,9 @@ export {
   updateSubscriptionStatus,
   updateSettings,
   deleteCompany,
+  companyTeamsMembers,
+  deactivateTeamMember,
+  activateTeamMember,
+  getJoinedCompany,
+  changeCompanyName
 };
