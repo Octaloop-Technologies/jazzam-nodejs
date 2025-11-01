@@ -29,6 +29,7 @@ const FollowUpLead = new mongoose.Schema({
     },
     scheduleDate: {
         type: Date,
+        default: null
     },
     scheduled: {
         type: Boolean,

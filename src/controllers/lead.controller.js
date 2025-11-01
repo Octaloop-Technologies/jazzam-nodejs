@@ -27,12 +27,12 @@ const getLeads = asyncHandler(async (req, res) => {
     companyId
   } = req.query;
 
-
   // Build match conditions - prefer query param, fallback to req.company._id
   const matchConditions = {
-    companyId: companyId || req.company._id
+    companyId: mongoose.Types.ObjectId.isValid(companyId)
+      ? new mongoose.mongo.ObjectId(companyId)
+      : req.company._id
   };
-
 
   if (status) matchConditions.status = status;
   if (formId)
@@ -297,7 +297,7 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
 // Get lead statistics
 const getLeadStats = asyncHandler(async (req, res) => {
   try {
-    const companyId = req.query?.companyId ?? req.company._id;
+    const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company._id;
 
     const stats = await Lead.aggregate([
       { $match: { companyId, status: { $ne: null } } },
@@ -431,6 +431,40 @@ const deleteLead = asyncHandler(async (req, res) => {
   }
 });
 
+// Create lead follow up
+const createLeadFollowup = asyncHandler(async (req, res) => {
+  try {
+    const leadId = req.params;
+    const { subject, message, status, scheduledDate, scheduled } = req.body;
+    const transformedScheduleData = new Date(scheduledDate);
+    const transformLeadId = new mongoose.mongo.ObjectId(leadId);
+    const lead = await Lead.findById(transformLeadId);
+    if (!lead) {
+      return res.status(400).json({ success: false, message: "Lead " })
+    }
+    const followUpData = {
+      companyId: lead?.companyId,
+      leadId,
+      channel: "email",
+      subject,
+      message,
+      status,
+      scheduleDate: transformedScheduleData || null,
+      scheduled,
+      dateOfSubmission: new Date
+    }
+    const newLeadFollowup = await FollowUp.create(followUpData);
+    return res.status(201).json({
+      success: true,
+      message: "Leads follow up created successfully",
+      data: newLeadFollowup
+    });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(500, error.message || "Failed to create lead follow up");
+  }
+})
+
 // Follow up email for lead
 const followUpEmail = asyncHandler(async (req, res) => {
   try {
@@ -461,7 +495,7 @@ const followUpEmail = asyncHandler(async (req, res) => {
 // get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
-    const companyId = req.params?.id;
+    const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company?._id;
     const followupLeadsData = await FollowUp.find({ companyId }).populate("leadId", "profilePic fullName company email");
     return res
       .status(200)
@@ -527,20 +561,27 @@ const scheduledLeads = async () => {
 
     const followUps = await FollowUp.find({
       status: { $in: ["scheduled"] },
-      scheduleDate: { $gte: todayStart, $lte: todayEnd },
+      // scheduleDate: { $gte: todayStart, $lte: todayEnd },
       scheduled: true
-    }).populate("leadId");
+    }).populate({
+      path: "leadId",
+      select: "email companyId", // only these from lead
+      populate: {
+        path: "companyId",
+        select: "companyName email"
+      }
+    });
 
     console.log(`📩 Found ${followUps.length} follow-up emails to send`);
 
     // 2️⃣ Send emails one by one
     for (const followUp of followUps) {
       try {
-        await emailService.sendFollowUpEmail(followUp.leadId);
+        await emailService.sendFollowUpEmail(followUp.leadId?.companyId?.companyName, followUp?.leadId?.email, followUp?.subject, followUp?.message);
 
         // 3️⃣ Update status and mark as scheduled
         followUp.status = "submitted";
-        followUp.scheduled = true;
+        followUp.scheduled = false;
         followUp.dateOfSubmission = new Date();
         await followUp.save();
 
@@ -734,5 +775,6 @@ export {
   followUpEmail,
   followUpLeads,
   scheduleFollowUpLeads,
-  scheduledLeads
+  scheduledLeads,
+  createLeadFollowup
 };

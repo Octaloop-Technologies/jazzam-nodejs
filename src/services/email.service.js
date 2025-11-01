@@ -276,7 +276,7 @@ class EmailService {
   // Send follow-up email to lead
   // ================================================
 
-  async sendFollowUpEmail(lead, form) {
+  async sendFollowUpEmail(companyName, email, subject, message) {
     try {
       // Ensure email service is initialized
       await this.#initializeTransporter();
@@ -288,24 +288,24 @@ class EmailService {
         return {
           success: false,
           message: "Email service not available",
-          recipient: lead.email,
+          recipient: email,
           timestamp: new Date().toISOString(),
         };
       }
 
       // Validate input parameters
-      this.#validateEmailAddress(lead.email, "Lead email");
+      this.#validateEmailAddress(email, "Lead email");
 
-      const mailOptions = this.#buildFollowUpMailOptions(lead, form);
+      const mailOptions = this.#buildFollowUpMailOptions(companyName, email, subject, message);
       const emailResult = await this.#sendEmail(mailOptions);
 
       console.log(
-        `✅ Follow-up email sent successfully to ${lead.email}: ${emailResult.messageId}`
+        `✅ Follow-up email sent successfully to ${email}: ${emailResult.messageId}`
       );
       return {
         success: true,
         messageId: emailResult.messageId,
-        recipient: lead.email,
+        recipient: email,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -313,7 +313,7 @@ class EmailService {
       return {
         success: false,
         message: error.message,
-        recipient: lead.email,
+        recipient: email,
         timestamp: new Date().toISOString(),
       };
     }
@@ -506,22 +506,19 @@ class EmailService {
 
 
   // Build mail options for follow-up email
-  #buildFollowUpMailOptions(lead, form) {
-    const companyName = form?.companyId?.companyName || "Our Company";
-    const subject =
-      form?.settings?.followUp?.subject || "Following up on your inquiry";
-    const message =
-      form?.settings?.followUp?.message ||
+  #buildFollowUpMailOptions(companyName, email, subject, message) {
+    const emailMessage =
+      message ||
       "Hi there! We wanted to follow up on your recent inquiry. Do you have any questions?";
 
     return {
       from: {
-        name: companyName,
+        name: companyName || "Our Company",
         address: process.env.EMAIL_COMPANY,
       },
-      to: lead.email,
-      subject: subject,
-      html: this.#generateFollowUpEmailTemplate(lead, companyName, message),
+      to: email,
+      subject: subject || "Following up on your inquiry",
+      html: this.#generateFollowUpEmailTemplate(email, emailMessage),
       priority: "normal",
     };
   }
@@ -639,35 +636,42 @@ class EmailService {
   }
 
   // Generate follow-up email template
-  #generateFollowUpEmailTemplate(lead, companyName, message) {
-    const leadName = lead.fullName || lead.firstName || "there";
+  #generateFollowUpEmailTemplate(email, message) {
+    const leadName = email || "there";
 
     return `
-      <!DOCTYPE html>
+     <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Follow-up from ${companyName}</title>
+        <title>Welcome to our waitlist!</title>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
-          .content { padding: 20px; background-color: #ffffff; border: 1px solid #e9ecef; border-radius: 8px; }
-          .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6c757d; }
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header-ar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>Following Up from ${companyName}</h1>
-        </div>
-        <div class="content">
-          <p>Hi ${leadName},</p>
-          <p>${message}</p>
-          <p>If you have any questions or would like to discuss further, please don't hesitate to reach out.</p>
-          <p>Best regards,<br>The ${companyName} Team</p>
-        </div>
-        <div class="footer">
-          <p>This email was sent to ${lead.email}</p>
+        <div class="container">
+          <div class="header">
+            <h1>Follow Up</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${leadName},</p>
+            
+           <div>${message}</div>
+            
+            <p>Best regards,<br>The Lead Generation Team</p>
+          </div>
+          <div class="footer">
+            <p>You're receiving this email because there is lead generated against your profile.</p>
+          </div>
+          
         </div>
       </body>
       </html>

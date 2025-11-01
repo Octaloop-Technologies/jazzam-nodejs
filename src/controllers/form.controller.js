@@ -9,6 +9,7 @@ import emailService from "../services/email.service.js";
 import bantService from "../services/bant.service.js";
 import { syncLeadToCrm } from "../services/crm/sync.service.js";
 import FollowUp from "../models/followUp.model.js";
+import mongoose from "mongoose";
 
 // ==============================================================
 // Form Management Functions
@@ -95,8 +96,12 @@ const getPlatformForms = asyncHandler(async (req, res) => {
 
 const getAvailablePlatforms = asyncHandler(async (req, res) => {
   // Get existing forms for this company
+  const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company._id
+
+  console.log("req query****", companyId)
+
   let existingForms = await Form.find({
-    companyId: req.company._id,
+    companyId,
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl status");
 
@@ -121,7 +126,7 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
         // Create new form
         const formTemplate = Form.createPlatformTemplate(
           platform,
-          req.company._id
+          companyId
         );
         const form = await Form.create(formTemplate);
 
@@ -142,7 +147,7 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
 
   // Refetch all forms after creation/fixing
   existingForms = await Form.find({
-    companyId: req.company._id,
+    companyId: companyId,
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl");
 
@@ -442,15 +447,6 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
-      // create follow up for lead
-      const followUpLeadData = {
-        companyId: form.companyId,
-        leadId: lead?._id,
-        channel: "email",
-        status: "pending"
-      }
-      await FollowUp.create(followUpLeadData);
-
       // Send welcome email to lead if enabled and lead has email
       if (form.settings.autoResponse.enabled && lead.email) {
         try {
@@ -501,6 +497,7 @@ const submitFormData = asyncHandler(async (req, res) => {
       // Sync lead to CRM if integration is active (async, non-blocking)
       syncLeadToCrmInBackground(lead, form.companyId._id);
     } catch (scrapingError) {
+      console.log("errororor*******", scrapingError)
       console.error("Scraping Error Details:", scrapingError);
     }
   } else {
@@ -548,6 +545,7 @@ const syncLeadToCrmInBackground = async (lead, companyId) => {
 
     // Find active CRM integration for the company
     const crmIntegration = await CrmIntegration.findOne({
+      provider: "salesforce",
       companyId: companyId,
       status: "active",
     });
