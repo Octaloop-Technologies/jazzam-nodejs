@@ -16,6 +16,7 @@ import {
   sendHtmlRedirect,
   generateSuccessRedirectUrl,
 } from "../utils/redirectUtils.js";
+// import { S3 } from "aws-sdk";
 
 // ==============================================================
 // Helper Functions for OAuth Authentication
@@ -25,6 +26,18 @@ const createAuthCookieOptions = () => ({
   accessToken: getAccessTokenCookieOptions(),
   refreshToken: getRefreshTokenCookieOptions(),
 });
+
+// ==============================================================
+// Set aws credentials
+// ==============================================================
+// const s3Client = new S3({
+//   region: process.env.AWS_REGION,
+//   credentials: {
+//     accessKeyId: process.env.AWS_CLIENT_ID,
+//     secretAccessKey: process.env.AWS_SECRET_KEY
+//   }
+// })
+
 
 const handleSuccessfulOAuth = async (
   res,

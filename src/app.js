@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import http from "http";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "./config/passport.js";
@@ -26,8 +27,22 @@ import {
 } from "./config/swagger-simple.config.js";
 import cron from "node-cron";
 import { scheduledLeads } from "./controllers/lead.controller.js";
+import { Server } from "socket.io";
 
+
+
+
+// ==========================================================
+// Setup socket io
+// ==========================================================
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: corsOptions
+});
+
+
+
 
 // ==========================================================
 // Validate environment variables on startup
@@ -46,11 +61,30 @@ app.use(securityHeaders); // Custom security headers
 app.use(cors(corsOptions)); // CORS configuration
 app.use(generalRateLimit); // General rate limiting
 
+// Attach io to req so routes can emit events
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // cron job for followup scheduling
 cron.schedule("0 0 * * *", scheduledLeads, {
   scheduled: true,
   timezone: "Asia/Riyadh"
 })
+
+// Socket.IO connection
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
+});
+
+// ❗ Register your error handlers *after* all routes but not before server.listen
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Raw body for Stripe webhooks (before JSON parsing)
 app.use(
@@ -155,6 +189,7 @@ import waitlistRouter from "./routes/waitlist.routes.js";
 import subscriptionRouter from "./routes/subscription.routes.js";
 import contactRouter from "./routes/contactUs.routes.js";
 import invitationRoute from "./routes/invitation.routes.js";
+import notificationsRoute from "./routes/notification.routes.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -170,8 +205,9 @@ app.use("/api/v1/leads", leadRouter);
 app.use("/api/v1/crm-integration", crmIntegrationRouter);
 app.use("/api/v1/waitlist", waitlistRouter);
 app.use("/api/v1/billing", subscriptionRouter);
-app.use("/api/v1/contact", contactRouter)
-app.use("/api/v1/invite", invitationRoute)
+app.use("/api/v1/contact", contactRouter);
+app.use("/api/v1/invite", invitationRoute);
+app.use("/api/v1/notifications", notificationsRoute)
 
 // ==========================================================
 // Error handling middleware (must be last)
