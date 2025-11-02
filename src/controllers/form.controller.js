@@ -552,32 +552,37 @@ const syncLeadToCrmInBackground = async (lead, companyId) => {
     console.log(`[CRM] Starting background sync for lead ${lead._id} to CRM`);
 
     // Find active CRM integration for the company
-    const crmIntegration = await CrmIntegration.findOne({
-      provider: "salesforce",
+    const crmIntegrations = await CrmIntegration.find({
       companyId: companyId,
       status: "active",
     });
 
-    if (!crmIntegration) {
+    if (!crmIntegrations) {
       console.log(
         `[CRM] No active CRM integration found for company: ${companyId}`
       );
       return;
     }
 
-    // Sync the lead to CRM
-    const syncResult = await syncLeadToCrm(lead._id, crmIntegration);
+    for (const crmIntegration of crmIntegrations) {
+      try {
+        const syncResult = await syncLeadToCrm(lead._id, crmIntegration);
 
-    if (syncResult.success) {
-      console.log(
-        `[CRM] Successfully synced lead ${lead._id} to ${crmIntegration.provider} CRM - CRM ID: ${syncResult.crmId}`
-      );
-    } else {
-      console.error(
-        `[CRM] Failed to sync lead ${lead._id} to CRM:`,
-        syncResult.error
-      );
+        if (syncResult.success) {
+          console.log(
+            `[CRM] Successfully synced lead ${lead._id} to ${crmIntegration.provider} CRM - CRM ID: ${syncResult.crmId}`
+          );
+        } else {
+          console.error(
+            `[CRM] Failed to sync lead ${lead._id} to ${crmIntegration.provider} CRM:`,
+            syncResult.error
+          );
+        }
+      } catch (err) {
+        console.error(`[CRM] Error syncing to ${crmIntegration.provider}:`, err);
+      }
     }
+
   } catch (error) {
     console.error(
       `[CRM] Error syncing lead ${lead._id} to CRM:`,
