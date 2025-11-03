@@ -82,9 +82,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// ❗ Register your error handlers *after* all routes but not before server.listen
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 // Raw body for Stripe webhooks (before JSON parsing)
 app.use(

@@ -685,33 +685,43 @@ const updateOnboardingStatus = asyncHandler(async (req, res) => {
 });
 
 const updateCompanyLogo = asyncHandler(async (req, res) => {
-  const logoLocalPath = req.file?.path;
 
-  if (!logoLocalPath) {
-    throw new ApiError(400, "Logo file is missing");
+  try {
+    const logoLocalPath = req.file?.path;
+
+    if (!logoLocalPath) {
+      throw new ApiError(400, "Logo file is missing");
+    }
+
+    // Delete old logo
+    // if (req.company.logo && req.company.logo.public_id) {
+    //   await deleteFromOSS(req.company.logo.public_id);
+    // }
+
+    // Upload new logo
+    const logo = await uploadToOSS(logoLocalPath);
+
+    if (!logo.url) {
+      throw new ApiError(500, "Something went wrong while uploading logo");
+    }
+
+    const company = await Company.findByIdAndUpdate(
+      req.company._id,
+      { $set: { logo: { url: logo.url, public_id: logo.public_id } } },
+      { new: true }
+    ).select("-password");
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, company, "Logo updated successfully"));
+  } catch (error) {
+    console.log("error*******", error)
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to delete team member"
+    );
   }
-
-  // Delete old logo
-  if (req.company.logo && req.company.logo.public_id) {
-    await deleteFromOSS(req.company.logo.public_id);
-  }
-
-  // Upload new logo
-  const logo = await uploadToOSS(logoLocalPath);
-
-  if (!logo.url) {
-    throw new ApiError(500, "Something went wrong while uploading logo");
-  }
-
-  const company = await Company.findByIdAndUpdate(
-    req.company._id,
-    { $set: { logo: { url: logo.url, public_id: logo.public_id } } },
-    { new: true }
-  ).select("-password");
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, company, "Logo updated successfully"));
 });
 
 const updateSubscriptionStatus = asyncHandler(async (req, res) => {
@@ -886,12 +896,12 @@ const getJoinedCompany = asyncHandler(async (req, res) => {
 
 const changeCompanyName = asyncHandler(async (req, res) => {
   console.log("suskksks", req.body);
-    const companyId = req.company?._id;
-    console.log("companyId", companyId);
+  const companyId = req.company?._id;
+  console.log("companyId", companyId);
   try {
     const { companyName } = req.body;
     const companyId = req.company?._id;
-    if(companyId){
+    if (companyId) {
       const company = await Company.findById(companyId);
       company.companyName = companyName;
       await company.save();

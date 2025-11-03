@@ -436,7 +436,7 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
   try {
     const leadId = req.params;
     const { subject, message, status, scheduledDate, scheduled } = req.body;
-    const transformedScheduleData = new Date(scheduledDate);
+    const transformedScheduleData = scheduledDate ? new Date(scheduledDate) : null;
     const transformLeadId = new mongoose.mongo.ObjectId(leadId);
     const lead = await Lead.findById(transformLeadId);
     if (!lead) {
@@ -449,7 +449,7 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
       subject,
       message,
       status,
-      scheduleDate: transformedScheduleData || null,
+      scheduleDate: transformedScheduleData,
       scheduled,
       dateOfSubmission: new Date
     }
