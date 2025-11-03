@@ -9,6 +9,8 @@ import emailService from "../services/email.service.js";
 import bantService from "../services/bant.service.js";
 import { syncLeadToCrm } from "../services/crm/sync.service.js";
 import FollowUp from "../models/followUp.model.js";
+import mongoose from "mongoose";
+import Notification from "../models/notifications.model.js";
 
 // ==============================================================
 // Form Management Functions
@@ -95,8 +97,12 @@ const getPlatformForms = asyncHandler(async (req, res) => {
 
 const getAvailablePlatforms = asyncHandler(async (req, res) => {
   // Get existing forms for this company
+  const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company._id
+
+  console.log("req query****", companyId)
+
   let existingForms = await Form.find({
-    companyId: req.company._id,
+    companyId,
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl status");
 
@@ -121,7 +127,7 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
         // Create new form
         const formTemplate = Form.createPlatformTemplate(
           platform,
-          req.company._id
+          companyId
         );
         const form = await Form.create(formTemplate);
 
@@ -142,7 +148,7 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
 
   // Refetch all forms after creation/fixing
   existingForms = await Form.find({
-    companyId: req.company._id,
+    companyId: companyId,
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl");
 
@@ -442,14 +448,6 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
-      // create follow up for lead
-      const followUpLeadData = {
-        leadId: lead?._id,
-        channel: "email",
-        status: "pending"
-      }
-      await FollowUp.create(followUpLeadData);
-
       // Send welcome email to lead if enabled and lead has email
       if (form.settings.autoResponse.enabled && lead.email) {
         try {
@@ -500,11 +498,19 @@ const submitFormData = asyncHandler(async (req, res) => {
       // Sync lead to CRM if integration is active (async, non-blocking)
       syncLeadToCrmInBackground(lead, form.companyId._id);
     } catch (scrapingError) {
+      console.log("errororor*******", scrapingError)
       console.error("Scraping Error Details:", scrapingError);
     }
   } else {
     console.log("Scraping skipped - either disabled or custom form type");
   }
+  const newNotification = await Notification.create({
+    companyId: form?.companyId,
+    title: "New Lead",
+    message: `New lead created for ${form?.formType} platform`
+  });
+  // Emit new notification via Socket.io
+  req.io.emit("new-notification", newNotification)
   return res
     .status(200)
     .json(new ApiResponse(200, { formData }, "Form submitted successfully"));
@@ -546,31 +552,37 @@ const syncLeadToCrmInBackground = async (lead, companyId) => {
     console.log(`[CRM] Starting background sync for lead ${lead._id} to CRM`);
 
     // Find active CRM integration for the company
-    const crmIntegration = await CrmIntegration.findOne({
+    const crmIntegrations = await CrmIntegration.find({
       companyId: companyId,
       status: "active",
     });
 
-    if (!crmIntegration) {
+    if (!crmIntegrations) {
       console.log(
         `[CRM] No active CRM integration found for company: ${companyId}`
       );
       return;
     }
 
-    // Sync the lead to CRM
-    const syncResult = await syncLeadToCrm(lead._id, crmIntegration);
+    for (const crmIntegration of crmIntegrations) {
+      try {
+        const syncResult = await syncLeadToCrm(lead._id, crmIntegration);
 
-    if (syncResult.success) {
-      console.log(
-        `[CRM] Successfully synced lead ${lead._id} to ${crmIntegration.provider} CRM - CRM ID: ${syncResult.crmId}`
-      );
-    } else {
-      console.error(
-        `[CRM] Failed to sync lead ${lead._id} to CRM:`,
-        syncResult.error
-      );
+        if (syncResult.success) {
+          console.log(
+            `[CRM] Successfully synced lead ${lead._id} to ${crmIntegration.provider} CRM - CRM ID: ${syncResult.crmId}`
+          );
+        } else {
+          console.error(
+            `[CRM] Failed to sync lead ${lead._id} to ${crmIntegration.provider} CRM:`,
+            syncResult.error
+          );
+        }
+      } catch (err) {
+        console.error(`[CRM] Error syncing to ${crmIntegration.provider}:`, err);
+      }
     }
+
   } catch (error) {
     console.error(
       `[CRM] Error syncing lead ${lead._id} to CRM:`,

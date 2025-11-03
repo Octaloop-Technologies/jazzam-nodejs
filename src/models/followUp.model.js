@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 const FollowUpLead = new mongoose.Schema({
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Company",
+    },
     leadId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Lead",
@@ -25,6 +29,7 @@ const FollowUpLead = new mongoose.Schema({
     },
     scheduleDate: {
         type: Date,
+        default: null
     },
     scheduled: {
         type: Boolean,

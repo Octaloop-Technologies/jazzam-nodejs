@@ -16,6 +16,7 @@ import {
   sendHtmlRedirect,
   generateSuccessRedirectUrl,
 } from "../utils/redirectUtils.js";
+// import { S3 } from "aws-sdk";
 
 // ==============================================================
 // Helper Functions for OAuth Authentication
@@ -25,6 +26,18 @@ const createAuthCookieOptions = () => ({
   accessToken: getAccessTokenCookieOptions(),
   refreshToken: getRefreshTokenCookieOptions(),
 });
+
+// ==============================================================
+// Set aws credentials
+// ==============================================================
+// const s3Client = new S3({
+//   region: process.env.AWS_REGION,
+//   credentials: {
+//     accessKeyId: process.env.AWS_CLIENT_ID,
+//     secretAccessKey: process.env.AWS_SECRET_KEY
+//   }
+// })
+
 
 const handleSuccessfulOAuth = async (
   res,
@@ -98,6 +111,50 @@ const generateAccessAndRefreshToken = async (companyId) => {
   }
 };
 
+// ==============================================================
+// Get Company dashboard
+// ==============================================================
+
+const getCompanyDashboard = asyncHandler(async (req, res) => {
+  try {
+    const companyId = req.params.id; // from auth
+
+    const company = await Company.findById(companyId)
+      .populate("joinedCompanies", "_id companyName email logo.url")
+      .lean();
+
+    console.log("company******", company)
+
+    if (!company) return res.status(404).json({ message: "Company not found" });
+
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          {
+            ownCompany: {
+              _id: company._id,
+              name: company.companyName,
+              email: company.email,
+              logo: company?.logo?.url
+            },
+            joinedCompanies: {
+              _id: company.joinedCompanies._id,
+              name: company.joinedCompanies.companyName,
+              email: company.joinedCompanies.email,
+              logo: company.joinedCompanies.logo?.url
+            }
+          },
+          "User companies retrieved successfully"
+        )
+      );
+
+  } catch (error) {
+    throw new ApiError(500, "Error while calling function for get dashboard");
+  }
+})
+
 const registerCompany = asyncHandler(async (req, res) => {
   const { companyName, email, password, website, industry, contactPerson } =
     req.body;
@@ -140,9 +197,9 @@ const registerCompany = asyncHandler(async (req, res) => {
     contactPerson,
     logo: logo
       ? {
-          url: logo.url,
-          public_id: logo.public_id,
-        }
+        url: logo.url,
+        public_id: logo.public_id,
+      }
       : null,
   });
 
@@ -276,14 +333,14 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
 
   // clear cookies
-    res.cookie("accessToken", 'none', {
+  res.cookie("accessToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
   });
 
-  res.cookie("refreshToken",'none', {
+  res.cookie("refreshToken", 'none', {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -393,10 +450,10 @@ const zohoLogin = asyncHandler(async (req, res) => {
   try {
     const { type } = req.query;
     let authUrl;
-    if(type === 'login'){
+    if (type === 'login') {
       // Redirect to Zoho OAuth
       authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_LOGIN_REDIRECT_URI}`;
-    }else{
+    } else {
       authUrl = `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCRM.modules.ALL,ZohoCRM.settings.ALL,ZohoCRM.users.ALL&client_id=${process.env.ZOHO_CLIENT_ID}&response_type=code&access_type=offline&redirect_uri=${process.env.ZOHO_REDIRECT_URI}`;
     }
 
@@ -628,33 +685,43 @@ const updateOnboardingStatus = asyncHandler(async (req, res) => {
 });
 
 const updateCompanyLogo = asyncHandler(async (req, res) => {
-  const logoLocalPath = req.file?.path;
 
-  if (!logoLocalPath) {
-    throw new ApiError(400, "Logo file is missing");
+  try {
+    const logoLocalPath = req.file?.path;
+
+    if (!logoLocalPath) {
+      throw new ApiError(400, "Logo file is missing");
+    }
+
+    // Delete old logo
+    // if (req.company.logo && req.company.logo.public_id) {
+    //   await deleteFromOSS(req.company.logo.public_id);
+    // }
+
+    // Upload new logo
+    const logo = await uploadToOSS(logoLocalPath);
+
+    if (!logo.url) {
+      throw new ApiError(500, "Something went wrong while uploading logo");
+    }
+
+    const company = await Company.findByIdAndUpdate(
+      req.company._id,
+      { $set: { logo: { url: logo.url, public_id: logo.public_id } } },
+      { new: true }
+    ).select("-password");
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, company, "Logo updated successfully"));
+  } catch (error) {
+    console.log("error*******", error)
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to delete team member"
+    );
   }
-
-  // Delete old logo
-  if (req.company.logo && req.company.logo.public_id) {
-    await deleteFromOSS(req.company.logo.public_id);
-  }
-
-  // Upload new logo
-  const logo = await uploadToOSS(logoLocalPath);
-
-  if (!logo.url) {
-    throw new ApiError(500, "Something went wrong while uploading logo");
-  }
-
-  const company = await Company.findByIdAndUpdate(
-    req.company._id,
-    { $set: { logo: { url: logo.url, public_id: logo.public_id } } },
-    { new: true }
-  ).select("-password");
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, company, "Logo updated successfully"));
 });
 
 const updateSubscriptionStatus = asyncHandler(async (req, res) => {
@@ -749,8 +816,109 @@ const updateSettings = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, company, "Settings updated successfully"));
 });
 
+
+// get team members assigned 
+const companyTeamsMembers = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url");
+    return res.status(200).json({ success: true, message: "Team members retrieved successfully", data: company });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+});
+
+const deactivateTeamMember = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const memberCompany = await Company.findById(id);
+    memberCompany.joinedCompanyStatus = false;
+    await memberCompany.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Team member status deactivated successfully",
+    });
+
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to delete team member"
+    );
+  }
+});
+
+const activateTeamMember = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const memberCompany = await Company.findById(id);
+    memberCompany.joinedCompanyStatus = true;
+    await memberCompany.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Team member status activated successfully",
+    });
+
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to delete team member"
+    );
+  }
+});
+
+
+const getJoinedCompany = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const companyId = req.company?._id;
+    const company = await Company.findOne({ _id: id }, { email: 1, companyName: 1 }).populate("joinedCompanies", "_id email companyName logo.url joinedCompanyStatus")
+    if (company) {
+      return res.status(200).json({ success: true, message: "Joined company data retrieved successfully", data: company });
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+});
+
+const changeCompanyName = asyncHandler(async (req, res) => {
+  console.log("suskksks", req.body);
+  const companyId = req.company?._id;
+  console.log("companyId", companyId);
+  try {
+    const { companyName } = req.body;
+    const companyId = req.company?._id;
+    if (companyId) {
+      const company = await Company.findById(companyId);
+      company.companyName = companyName;
+      await company.save();
+      return res.status(201).json({ success: true, message: "Company name changed successfully" })
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+})
+
 export {
   registerCompany,
+  getCompanyDashboard,
   loginCompany,
   googleLoginCallback,
   zohoLoginCallback,
@@ -766,4 +934,9 @@ export {
   updateSubscriptionStatus,
   updateSettings,
   deleteCompany,
+  companyTeamsMembers,
+  deactivateTeamMember,
+  activateTeamMember,
+  getJoinedCompany,
+  changeCompanyName
 };

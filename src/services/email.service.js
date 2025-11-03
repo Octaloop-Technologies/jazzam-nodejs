@@ -276,7 +276,7 @@ class EmailService {
   // Send follow-up email to lead
   // ================================================
 
-  async sendFollowUpEmail(lead, form) {
+  async sendFollowUpEmail(companyName, email, subject, message) {
     try {
       // Ensure email service is initialized
       await this.#initializeTransporter();
@@ -288,24 +288,24 @@ class EmailService {
         return {
           success: false,
           message: "Email service not available",
-          recipient: lead.email,
+          recipient: email,
           timestamp: new Date().toISOString(),
         };
       }
 
       // Validate input parameters
-      this.#validateEmailAddress(lead.email, "Lead email");
+      this.#validateEmailAddress(email, "Lead email");
 
-      const mailOptions = this.#buildFollowUpMailOptions(lead, form);
+      const mailOptions = this.#buildFollowUpMailOptions(companyName, email, subject, message);
       const emailResult = await this.#sendEmail(mailOptions);
 
       console.log(
-        `✅ Follow-up email sent successfully to ${lead.email}: ${emailResult.messageId}`
+        `✅ Follow-up email sent successfully to ${email}: ${emailResult.messageId}`
       );
       return {
         success: true,
         messageId: emailResult.messageId,
-        recipient: lead.email,
+        recipient: email,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -313,7 +313,50 @@ class EmailService {
       return {
         success: false,
         message: error.message,
-        recipient: lead.email,
+        recipient: email,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
+  async sendInvitationEmail(name, email, link){
+        try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
+      if (!this.#isInitialized) {
+        console.warn(
+          "⚠️ Email service not initialized. Skipping invitation link email."
+        );
+        return {
+          success: false,
+          message: "Email service not available",
+          recipient: email,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Validate input parameters
+      this.#validateEmailAddress(email);
+
+      const mailOptions = this.#buildInvitationEmailOptions(email,link, name);
+      const emailResult = await this.#sendEmail(mailOptions);
+
+      console.log(
+        `✅ Invitation email sent successfully to ${email}: ${emailResult.messageId}`
+      );
+      return {
+        success: true,
+        messageId: emailResult.messageId,
+        recipient: email,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ Failed to send invitation email:", error.message);
+      return {
+        success: false,
+        message: error.message,
+        recipient: email,
         timestamp: new Date().toISOString(),
       };
     }
@@ -460,26 +503,45 @@ class EmailService {
     };
   }
 
+
+
   // Build mail options for follow-up email
-  #buildFollowUpMailOptions(lead, form) {
-    const companyName = form?.companyId?.companyName || "Our Company";
-    const subject =
-      form?.settings?.followUp?.subject || "Following up on your inquiry";
-    const message =
-      form?.settings?.followUp?.message ||
+  #buildFollowUpMailOptions(companyName, email, subject, message) {
+    const emailMessage =
+      message ||
       "Hi there! We wanted to follow up on your recent inquiry. Do you have any questions?";
+
+    return {
+      from: {
+        name: companyName || "Our Company",
+        address: process.env.EMAIL_COMPANY,
+      },
+      to: email,
+      subject: subject || "Following up on your inquiry",
+      html: this.#generateFollowUpEmailTemplate(email, emailMessage),
+      priority: "normal",
+    };
+  }
+
+
+  // Build mail options for follow-up email
+  #buildInvitationEmailOptions(receiverEmail, link, name) {
+    const companyName = "Our Company";
+    const subject = "Invitation Link";
+    const message = "I'm excited to invite you to join our company. Here's your personal invitation link:";
 
     return {
       from: {
         name: companyName,
         address: process.env.EMAIL_COMPANY,
       },
-      to: lead.email,
+      to: receiverEmail,
       subject: subject,
-      html: this.#generateFollowUpEmailTemplate(lead, companyName, message),
+      html: this.#generateInvitationLinkTemplate(link, companyName, message, name),
       priority: "normal",
     };
   }
+  
 
   // Build mail options for lead notification email
   #buildLeadNotificationMailOptions(lead, form, company) {
@@ -544,17 +606,14 @@ class EmailService {
     `;
   }
 
-  // Generate follow-up email template
-  #generateFollowUpEmailTemplate(lead, companyName, message) {
-    const leadName = lead.fullName || lead.firstName || "there";
-
+  #generateInvitationLinkTemplate(link, companyName, message, name) {
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Follow-up from ${companyName}</title>
+        <title>Welcome from </title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
           .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
@@ -564,16 +623,55 @@ class EmailService {
       </head>
       <body>
         <div class="header">
-          <h1>Following Up from ${companyName}</h1>
         </div>
         <div class="content">
-          <p>Hi ${leadName},</p>
+          <p>Hi ${name} ,</p>
           <p>${message}</p>
-          <p>If you have any questions or would like to discuss further, please don't hesitate to reach out.</p>
+          <p>${link}</p>
           <p>Best regards,<br>The ${companyName} Team</p>
         </div>
-        <div class="footer">
-          <p>This email was sent to ${lead.email}</p>
+      </body>
+      </html>
+    `;
+  }
+
+  // Generate follow-up email template
+  #generateFollowUpEmailTemplate(email, message) {
+    const leadName = email || "there";
+
+    return `
+     <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to our waitlist!</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header-ar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Follow Up</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${leadName},</p>
+            
+           <div>${message}</div>
+            
+            <p>Best regards,<br>The Lead Generation Team</p>
+          </div>
+          <div class="footer">
+            <p>You're receiving this email because there is lead generated against your profile.</p>
+          </div>
+          
         </div>
       </body>
       </html>

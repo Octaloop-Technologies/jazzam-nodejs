@@ -15,6 +15,12 @@ import {
   updateCompanyLogo,
   updateSubscriptionStatus,
   updateSettings,
+  getCompanyDashboard,
+  companyTeamsMembers,
+  getJoinedCompany,
+  deactivateTeamMember,
+  activateTeamMember,
+  changeCompanyName,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -64,6 +70,24 @@ router.use(verifyJWT);
 
 // POST /api/v1/companies/auth/logout
 router.route("/auth/logout").post(logoutCompany);
+
+// Get all team members
+router.route("/auth/team-members/:id").get(companyTeamsMembers)
+
+// Get joined company
+router.route("/auth/joined-company/:id").get(getJoinedCompany)
+
+// Deactivate team member
+router.route("/auth/deactivate-member/:id").put(deactivateTeamMember)
+
+// Activate team member
+router.route("/auth/activate-member/:id").put(activateTeamMember);
+
+// Change company name
+router.route("/auth/change-name/:id").patch(changeCompanyName)
+
+// GET /api/v1/auth/companies/:id
+router.route("/:id").get(getCompanyDashboard)
 
 // POST /api/v1/companies/auth/change-password
 router.route("/auth/change-password").post(changeCurrentPassword);

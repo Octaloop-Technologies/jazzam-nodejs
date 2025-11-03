@@ -13,6 +13,7 @@ import {
   followUpEmail,
   followUpLeads,
   scheduleFollowUpLeads,
+  createLeadFollowup,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -69,6 +70,10 @@ router.route("/:id/status").patch(updateLeadStatus);
 // Soft delete a lead
 // DELETE /api/v1/lead/:id
 router.route("/:id").delete(deleteLead);
+
+// Create lead followup
+// POST /api/v1/lead/create-followup
+router.route("/create-followup/:id").post(createLeadFollowup)
 
 // lead follow up email
 router.route("/follow-up/:id").post(followUpEmail)

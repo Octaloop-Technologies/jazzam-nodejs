@@ -214,6 +214,43 @@ const companySchema = new Schema(
         type: Date,
       },
     },
+
+    // Team management
+    subscriptionSeats: {
+      type: Number,
+      default: 1, // Owner + additional seats
+    },
+    usedSeats: {
+      type: Number,
+      default: 1, // Owner counts as 1 seat
+    },
+    joinedCompanies:
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+    },
+    joinedCompanyStatus:{
+      type: Boolean,
+      default: false
+    },
+    teamMembers: [
+      {
+        company: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Company",
+          required: true,
+        },
+        role: {
+          type: String,
+          enum: ["owner", "member"],
+          default: "member",
+        },
+        joinedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -299,5 +336,15 @@ companySchema.methods.incrementEmailCount = function () {
 companySchema.index({ subscriptionPlan: 1 });
 companySchema.index({ isActive: 1 });
 companySchema.index({ createdAt: -1 });
+
+// Virtual to check if company can add more team members
+companySchema.virtual("canAddTeamMembers").get(function () {
+  return this.usedSeats < this.subscriptionSeats;
+});
+
+// Method to check available seats
+companySchema.methods.getAvailableSeats = function () {
+  return this.subscriptionSeats - this.usedSeats;
+};
 
 export const Company = mongoose.model("Company", companySchema);
