@@ -504,13 +504,13 @@ const submitFormData = asyncHandler(async (req, res) => {
   } else {
     console.log("Scraping skipped - either disabled or custom form type");
   }
-  const newNotification = await Notification.create({
-    companyId: form?.companyId,
-    title: "New Lead",
-    message: `New lead created for ${form?.formType} platform`
-  });
-  // Emit new notification via Socket.io
-  req.io.emit("new-notification", newNotification)
+  // const newNotification = await Notification.create({
+  //   companyId: form?.companyId,
+  //   title: "New Lead",
+  //   message: `New lead created for ${form?.formType} platform`
+  // });
+  // // Emit new notification via Socket.io
+  // req.io.emit("new-notification", newNotification)
   return res
     .status(200)
     .json(new ApiResponse(200, { formData }, "Form submitted successfully"));
