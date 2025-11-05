@@ -44,9 +44,19 @@ router.route("/auth/login").post(loginCompany);
 // ================================================
 
 // GET /api/v1/companies/auth/google
+/* Old way of google login */
+// router
+//   .route("/auth/google")
+//   .get(passport.authenticate("google", { scope: ["profile", "email"] }));
 router
   .route("/auth/google")
-  .get(passport.authenticate("google", { scope: ["profile", "email"] }));
+  .get((req, res, next) => {
+    // Store callback URL in session or state if needed
+    if (req.query.callbackUrl) {
+      req.session.callbackUrl = req.query.callbackUrl;
+    }
+    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  });
 router.route("/auth/google/callback").get(
   passport.authenticate("google", {
     failureRedirect: "/login?error=auth_failed",

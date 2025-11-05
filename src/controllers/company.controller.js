@@ -68,25 +68,31 @@ const handleSuccessfulOAuth = async (
     // Generate redirect URL with provider info
     const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
       path: redirectPath,
+      accessToken,
+      refreshToken
     });
 
-    res.cookie('accessToken', accessToken, securityConfig.session.cookie);
+    return res.redirect(redirectUrl)
 
-    res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
+    /* Old way of setting cookies and redirecting */
 
-    return res.redirect(redirectUrl);
+    // res.cookie('accessToken', accessToken, securityConfig.session.cookie);
+
+    // res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
+
+    // return res.redirect(redirectUrl);
 
     // Send HTML redirect with cookies
-    sendHtmlRedirect(
-      res,
-      redirectUrl,
-      { accessToken, refreshToken },
-      cookieOptions,
-      {
-        title: `Welcome${company.companyName ? `, ${company.companyName}` : ""}!`,
-        message: `Successfully authenticated with ${provider}. Redirecting to dashboard...`,
-      }
-    );
+    // sendHtmlRedirect(
+    //   res,
+    //   redirectUrl,
+    //   { accessToken, refreshToken },
+    //   cookieOptions,
+    //   {
+    //     title: `Welcome${company.companyName ? `, ${company.companyName}` : ""}!`,
+    //     message: `Successfully authenticated with ${provider}. Redirecting to dashboard...`,
+    //   }
+    // );
   } catch (error) {
     console.error(`OAuth success handler error for ${provider}:`, error);
     throw new ApiError(500, `Failed to complete ${provider} authentication`);
