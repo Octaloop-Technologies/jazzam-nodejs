@@ -7,10 +7,7 @@ import { Company } from "../models/company.model.js";
 passport.use(
   new JwtStrategy(
     {
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (req) => req.cookies?.accessToken,
-      ]),
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Only use header, remove cookie extractor
       secretOrKey: process.env.ACCESS_TOKEN_SECRET,
     },
     async (payload, done) => {

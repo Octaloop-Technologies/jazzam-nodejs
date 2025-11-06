@@ -102,19 +102,20 @@ app.use(
   })
 );
 app.use(express.static("public"));
-app.use(cookieParser());
-app.use(sanitizeInput); // Input sanitization
+// app.use(cookieParser());
+// app.use(sanitizeInput); // Input sanitization
+
+app.use(passport.initialize()); 
 
 // ==========================================================
 // Session configuration for passport
 // ==========================================================
-app.use(session(securityConfig.session));
+// app.use(session(securityConfig.session));
 
 // ==========================================================
 // Passport middleware
 // ==========================================================
-app.use(passport.initialize());
-app.use(passport.session());
+// app.use(passport.session());
 
 // ==========================================================
 // Root route - API health check
