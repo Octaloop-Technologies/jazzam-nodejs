@@ -1,72 +1,110 @@
 import { ApiError } from "../utils/ApiError.js";
+import { ApifyClient } from 'apify-client';
 
 class ScrapingService {
   constructor() {
-    this.apiKey = process.env.APIFY_KEY;
+    this.client = new ApifyClient({
+      token: process.env.APIFY_KEY,
+    });
     this.baseUrl = "https://api.apify.com/v2";
   }
 
-  // Generic method to handle Apify actor runs
-  async runApifyActor(actorId, input) {
-    if (!this.apiKey) {
-      throw new ApiError(500, "Scraping service is not configured");
+  // Generic method to handle Apify actor runs with SDK
+  async runApifyActor(formType, actorId, url, proxyFormat = 'proxyConfiguration') {
+    if (!process.env.APIFY_KEY) {
+      throw new ApiError(500, "APIFY_TOKEN is not configured");
     }
 
+    console.log("url****", url)
     try {
-      // Step 1: Start Actor
-      const startResponse = await fetch(
-        `${this.baseUrl}/acts/${actorId}/runs?token=${this.apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
+      console.log(`Starting Apify actor: ${actorId}`);
+
+      // FIXED: Proper proxy configuration based on actor requirements
+      let input;
+
+      if (formType === 'twitter') {
+        input = {
+          "startUrls": [url],
+          "addUserInfo": true,
+          "customMapFunction": (object) => { return { ...object } },
+          "proxy": {
+            "useApifyProxy": true,
+            "apifyProxyGroups": ["BUYPROXIES94952"],  // Add proxy groups
+            "apifyProxyCountry": "US"             // Add country
+          }
+        };
+      } else if (formType === 'facebook') {
+        input = {
+          "urls": [url],
+          "proxyConfiguration": {
+            "useApifyProxy": true,
+            "apifyProxyGroups": ["BUYPROXIES94952"],  // Add proxy groups
+            "apifyProxyCountry": "US"             // Add country
+          }
         }
-      );
-
-      if (!startResponse.ok) {
-        throw new ApiError(500, `Failed to start ${actorId} scraping process`);
+      } else if (formType === 'instagram') {
+        const userName = url.split("/")[3];
+        console.log("username**********", userName)
+        input = {
+          "includeAboutSection": false,
+          "usernames": [
+            userName
+          ]
+        }
       }
 
-      const startData = await startResponse.json();
-      const runId = startData.data.id;
+      // if (proxyFormat === 'proxy') {
+      //   // For actors that use "proxy" field (like epctex actors)
+      //   input = {
+      //     "startUrls": [url],
+      //     "addUserInfo": true,
+      //     "customMapFunction": (object) => { return {...object} },
+      //     "proxy": {
+      //       "useApifyProxy": true,
+      //       "apifyProxyGroups": ["BUYPROXIES94952"],  // Add proxy groups
+      //       "apifyProxyCountry": "US"             // Add country
+      //     }
+      //   };
+      // } else {
+      //   // For actors that use "proxyConfiguration" field
+      //   input = {
+      //     "startUrls": [url],
+      //     "addUserInfo": true,
+      //     "customMapFunction": (object) => { return {...object} },
+      //     "proxyConfiguration": {
+      //       "useApifyProxy": true,
+      //       "apifyProxyGroups": ["RESIDENTIAL"],
+      //       "apifyProxyCountry": "US"
+      //     }
+      //   };
+      // }
 
-      // Step 2: Poll until run is finished
-      let runStatus = "READY";
-      let datasetId = null;
+      const run = await this.client.actor(actorId).call(input);
 
-      while (["READY", "RUNNING"].includes(runStatus)) {
-        const runResponse = await fetch(
-          `${this.baseUrl}/actor-runs/${runId}?token=${this.apiKey}`
-        );
-        const runData = await runResponse.json();
+      console.log(`Actor run started! Run ID: ${run.id}`);
+      console.log(`Status: ${run.status}`);
+      console.log(`Monitor at: https://console.apify.com/actors/runs/${run.id}`);
 
-        runStatus = runData.data.status;
-        datasetId = runData.data.defaultDatasetId;
+      // Wait for the actor to finish
+      const finishedRun = await this.client.run(run.id).waitForFinish();
 
-        if (["SUCCEEDED", "FAILED", "ABORTED"].includes(runStatus)) break;
+      console.log(`Actor finished with status: ${finishedRun.status}`);
 
-        await new Promise((r) => setTimeout(r, 5000)); // wait 5 sec
-      }
-
-      if (runStatus !== "SUCCEEDED") {
+      if (finishedRun.status !== 'SUCCEEDED') {
         throw new ApiError(
           500,
-          `${actorId} scraping failed with status: ${runStatus}`
+          `${actorId} scraping failed with status: ${finishedRun.status}`
         );
       }
 
-      // Step 3: Fetch dataset items
-      const datasetResponse = await fetch(
-        `${this.baseUrl}/datasets/${datasetId}/items?token=${this.apiKey}&format=json`
-      );
+      // Get the results from the default dataset
+      const { items } = await this.client.dataset(finishedRun.defaultDatasetId).listItems();
 
-      if (!datasetResponse.ok) {
-        throw new ApiError(500, `Failed to fetch ${actorId} data`);
-      }
+      console.log(`📦 Scraped ${items.length} items from ${actorId}`);
 
-      const results = await datasetResponse.json();
-      return Array.isArray(results) ? results[0] : results;
+      return Array.isArray(items) && items.length > 0 ? items[0] : items;
     } catch (error) {
+      console.error(`Error running ${actorId}:`, error.message);
       if (error instanceof ApiError) throw error;
       throw new ApiError(500, `Scraping error: ${error.message}`);
     }
@@ -75,41 +113,25 @@ class ScrapingService {
   // LinkedIn Profile Scraping
   async scrapeLinkedInProfile(profileUrl) {
     const actorId = "dev_fusion~linkedin-profile-scraper";
-    const input = {
-      profileUrls: [profileUrl],
-    };
-
-    return await this.runApifyActor(actorId, input);
+    return await this.runApifyActor("linkedIn", actorId, profileUrl, 'proxyConfiguration');
   }
 
   // Meta/Facebook Profile Scraping
   async scrapeMetaProfile(username) {
-    const actorId = "dev_fusion~facebook-profile-scraper";
-    const input = {
-      usernames: [username],
-    };
-
-    return await this.runApifyActor(actorId, input);
+    const actorId = "igolaizola/facebook-profile-scraper";
+    return await this.runApifyActor("facebook", actorId, username, 'proxy');
   }
 
-  // Twitter Profile Scraping
+  // Twitter Profile Scraping - Using epctex/twitter-profile-scraper
   async scrapeTwitterProfile(username) {
-    const actorId = "dev_fusion~twitter-profile-scraper";
-    const input = {
-      usernames: [username],
-    };
-
-    return await this.runApifyActor(actorId, input);
+    const actorId = "epctex/twitter-profile-scraper";
+    return await this.runApifyActor("twitter", actorId, username, 'proxy');
   }
 
   // Instagram Profile Scraping
   async scrapeInstagramProfile(username) {
-    const actorId = "dev_fusion~instagram-profile-scraper";
-    const input = {
-      usernames: [username],
-    };
-
-    return await this.runApifyActor(actorId, input);
+    const actorId = "apify/instagram-profile-scraper";
+    return await this.runApifyActor("instagram", actorId, username, 'proxyConfiguration');
   }
 
   // Generic platform scraping method
@@ -197,14 +219,20 @@ class ScrapingService {
           companySize: scrapedData.companySize || null,
           jobTitle: scrapedData.jobTitle || null,
           department: scrapedData.department || null,
-          location: scrapedData.location || null,
+          location: scrapedData.location || scrapedData.user?.location || null,
           country: scrapedData.country || null,
           city: scrapedData.city || null,
           profilePic:
             scrapedData.profilePicUrl ||
             scrapedData.imgUrl ||
             scrapedData.photoUrl ||
+            scrapedData.user?.profile_image_url ||
             null,
+          // Twitter-specific fields
+          username: scrapedData.username || scrapedData.user?.screen_name || null,
+          bio: scrapedData.bio || scrapedData.user?.description || null,
+          followersCount: scrapedData.followersCount || scrapedData.user?.followers_count || null,
+          followingCount: scrapedData.followingCount || scrapedData.user?.friends_count || null,
         };
 
       case "instagram":
@@ -296,7 +324,7 @@ class ScrapingService {
         description: "Scrape Twitter profile data",
         identifierType: "Username",
         identifierExample: "username",
-        actorId: "dev_fusion~twitter-profile-scraper",
+        actorId: "epctex/twitter-profile-scraper",
       },
       {
         platform: "instagram",
@@ -307,6 +335,73 @@ class ScrapingService {
         actorId: "dev_fusion~instagram-profile-scraper",
       },
     ];
+  }
+
+  // Advanced method: Run actor and stream results (for large datasets)
+  async runApifyActorWithStreaming(actorId, input) {
+    if (!process.env.APIFY_KEY) {
+      throw new ApiError(500, "APIFY_KEY is not configured");
+    }
+
+    try {
+      console.log(`Starting Apify actor with streaming: ${actorId}`);
+
+      // Add proxy configuration to input
+      const inputWithProxy = {
+        ...input,
+        proxyConfiguration: {
+          useApifyProxy: true,
+          apifyProxyGroups: ['RESIDENTIAL'],
+          apifyProxyCountry: 'US',
+        },
+      };
+
+      // Start the actor
+      const run = await this.client.actor(actorId).start(inputWithProxy);
+
+      console.log(`Actor started: ${run.id}`);
+
+      // Monitor progress and stream partial results
+      let isFinished = false;
+      let lastItemCount = 0;
+
+      while (!isFinished) {
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Check every 10 seconds
+
+        const currentRun = await this.client.run(run.id).get();
+        console.log(`Status: ${currentRun.status}`);
+
+        // Get partial results
+        const dataset = await this.client.dataset(currentRun.defaultDatasetId).listItems();
+        const newItems = dataset.items.slice(lastItemCount);
+
+        if (newItems.length > 0) {
+          console.log(`New items scraped: ${newItems.length}`);
+          // You can process newItems here for real-time updates
+        }
+
+        lastItemCount = dataset.items.length;
+
+        if (['SUCCEEDED', 'FAILED', 'ABORTED'].includes(currentRun.status)) {
+          isFinished = true;
+        }
+      }
+
+      // Get final results
+      const finalRun = await this.client.run(run.id).get();
+      if (finalRun.status !== 'SUCCEEDED') {
+        throw new ApiError(500, `Actor ${actorId} failed: ${finalRun.status}`);
+      }
+
+      const { items } = await this.client.dataset(finalRun.defaultDatasetId).listItems();
+      console.log(`📦 Final result: ${items.length} items from ${actorId}`);
+
+      return Array.isArray(items) && items.length > 0 ? items[0] : items;
+    } catch (error) {
+      console.error(`Streaming error for ${actorId}:`, error.message);
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(500, `Streaming scraping error: ${error.message}`);
+    }
   }
 }
 

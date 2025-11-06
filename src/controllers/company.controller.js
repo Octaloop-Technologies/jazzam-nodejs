@@ -66,13 +66,15 @@ const handleSuccessfulOAuth = async (
       : "/super-user";
 
     // Generate redirect URL with provider info
-    const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
-      path: redirectPath,
-    });
+    // const redirectUrl = generateSuccessRedirectUrl(process.env.CLIENT_URL, {
+    //   path: redirectPath,
+    // });
 
-    res.cookie('accessToken', accessToken, securityConfig.session.cookie);
+    const redirectUrl = `${process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:3000"}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
 
-    res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
+    // res.cookie('accessToken', accessToken, securityConfig.session.cookie);
+
+    // res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
 
     return res.redirect(redirectUrl);
 

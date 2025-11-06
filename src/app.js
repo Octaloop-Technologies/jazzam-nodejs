@@ -74,13 +74,13 @@ cron.schedule("0 0 * * *", scheduledLeads, {
 })
 
 // Socket.IO connection
-io.on("connection", (socket) => {
-  console.log("A user connected:", socket.id);
+// io.on("connection", (socket) => {
+//   console.log("A user connected:", socket.id);
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
-  });
-});
+//   socket.on("disconnect", () => {
+//     console.log("User disconnected:", socket.id);
+//   });
+// });
 
 
 // Raw body for Stripe webhooks (before JSON parsing)

@@ -6,9 +6,8 @@ import { securityConfig } from "../config/security.config.js";
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
   try {
-    const token =
-      req.cookies?.accessToken ||
-      req.header("Authorization")?.replace("Bearer ", "");
+    // Get token from Authorization header first, then fallback to cookies for backward compatibility
+    const token = req.header("Authorization")?.replace("Bearer ", "")
 
     if (!token) {
       throw new ApiError(401, "Unauthorized request");
@@ -40,12 +39,6 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     if (!company.isActive) {
       throw new ApiError(401, "Company account is deactivated");
     }
-
-    // Check if company has active subscription or is on trial
-    // Temporarily allow all companies to access forms for testing
-    // if (!company.canAccessPremiumFeatures()) {
-    //   throw new ApiError(403, "Company subscription expired or inactive");
-    // }
 
     req.company = company;
     next();
