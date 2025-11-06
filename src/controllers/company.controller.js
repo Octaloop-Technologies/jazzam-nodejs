@@ -5,27 +5,27 @@ import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Validator } from "../utils/validator.js";
-import {
-  getAccessTokenCookieOptions,
-  getRefreshTokenCookieOptions,
-  getClearAccessTokenCookieOptions,
-  getClearRefreshTokenCookieOptions,
-  securityConfig,
-} from "../config/security.config.js";
-import {
-  sendHtmlRedirect,
-  generateSuccessRedirectUrl,
-} from "../utils/redirectUtils.js";
+// import {
+//   getAccessTokenCookieOptions,
+//   getRefreshTokenCookieOptions,
+//   getClearAccessTokenCookieOptions,
+//   getClearRefreshTokenCookieOptions,
+//   securityConfig,
+// } from "../config/security.config.js";
+// import {
+//   sendHtmlRedirect,
+//   generateSuccessRedirectUrl,
+// } from "../utils/redirectUtils.js";
 // import { S3 } from "aws-sdk";
 
 // ==============================================================
 // Helper Functions for OAuth Authentication
 // ==============================================================
 
-const createAuthCookieOptions = () => ({
-  accessToken: getAccessTokenCookieOptions(),
-  refreshToken: getRefreshTokenCookieOptions(),
-});
+// const createAuthCookieOptions = () => ({
+//   accessToken: getAccessTokenCookieOptions(),
+//   refreshToken: getRefreshTokenCookieOptions(),
+// });
 
 // ==============================================================
 // Set aws credentials
@@ -335,19 +335,19 @@ const logoutCompany = asyncHandler(async (req, res) => {
   // const refreshTokenOptions = getClearRefreshTokenCookieOptions();
 
   // clear cookies
-  res.cookie("accessToken", 'none', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+  // res.cookie("accessToken", 'none', {
+  //   httpOnly: true,
+  //   secure: process.env.NODE_ENV === "production",
+  //   sameSite: "lax",
+  //   path: "/",
+  // });
 
-  res.cookie("refreshToken", 'none', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+  // res.cookie("refreshToken", 'none', {
+  //   httpOnly: true,
+  //   secure: process.env.NODE_ENV === "production",
+  //   sameSite: "lax",
+  //   path: "/",
+  // });
 
   // send response
   return res
@@ -789,8 +789,8 @@ const deleteCompany = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .clearCookie("accessToken", getClearAccessTokenCookieOptions())
-    .clearCookie("refreshToken", getClearRefreshTokenCookieOptions())
+    // .clearCookie("accessToken", getClearAccessTokenCookieOptions())
+    // .clearCookie("refreshToken", getClearRefreshTokenCookieOptions())
     .json(new ApiResponse(200, null, "Company deleted successfully"));
 });
 
