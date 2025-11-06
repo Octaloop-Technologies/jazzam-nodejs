@@ -28,6 +28,12 @@ export const corsOptions = {
 
     const allowedOrigins = securityConfig.cors.allowedOrigins;
 
+    // Handle case where allowedOrigins might not be defined
+    if (!allowedOrigins) {
+      console.warn("CORS allowedOrigins not configured, allowing all origins in development");
+      return callback(null, true);
+    }
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {

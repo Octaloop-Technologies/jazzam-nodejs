@@ -29,15 +29,17 @@ export const securityConfig = {
   // CORS Configuration
   cors: {
     allowedOrigins: [process.env.CLIENT_URL],
+    origin: process.env.CLIENT_URL,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: [
-      "Content-Type",
-      "Authorization",
+      "Content-Type", 
+      "Authorization", 
       "X-Requested-With",
-      "Cookie",
+      "Accept",
+      "Origin"
     ],
-    exposedHeaders: ["Set-Cookie"],
+    exposedHeaders: ["Set-Cookie"]
   },
 
   // Rate Limiting Configuration
