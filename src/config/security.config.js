@@ -89,16 +89,7 @@ export const securityConfig = {
     secret: process.env.SESSION_SECRET || "this-is-a-secret-key",
     resave: false,
     saveUninitialized: false,
-    cookie: {
-      httpOnly: process.env.NODE_ENV === "production" ? true : false,
-      secure: process.env.NODE_ENV === "production" ? true : false,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      domain:
-        process.env.NODE_ENV === "production"
-          ? process.env.COOKIE_DOMAIN || undefined
-          : "localhost",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
-    },
+    cookie: false,
   },
 
   // Token Refresh Configuration
