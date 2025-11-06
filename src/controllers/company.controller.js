@@ -52,7 +52,7 @@ const handleSuccessfulOAuth = async (
     );
 
     // Create cookie options
-    const cookieOptions = createAuthCookieOptions();
+    // const cookieOptions = createAuthCookieOptions();
 
     // Decide post-login redirect based on subscription status
     // User has selected a plan if subscriptionStartDate is set
@@ -79,16 +79,16 @@ const handleSuccessfulOAuth = async (
     return res.redirect(redirectUrl);
 
     // Send HTML redirect with cookies
-    sendHtmlRedirect(
-      res,
-      redirectUrl,
-      { accessToken, refreshToken },
-      cookieOptions,
-      {
-        title: `Welcome${company.companyName ? `, ${company.companyName}` : ""}!`,
-        message: `Successfully authenticated with ${provider}. Redirecting to dashboard...`,
-      }
-    );
+    // sendHtmlRedirect(
+    //   res,
+    //   redirectUrl,
+    //   { accessToken, refreshToken },
+    //   cookieOptions,
+    //   {
+    //     title: `Welcome${company.companyName ? `, ${company.companyName}` : ""}!`,
+    //     message: `Successfully authenticated with ${provider}. Redirecting to dashboard...`,
+    //   }
+    // );
   } catch (error) {
     console.error(`OAuth success handler error for ${provider}:`, error);
     throw new ApiError(500, `Failed to complete ${provider} authentication`);
@@ -228,8 +228,8 @@ const registerCompany = asyncHandler(async (req, res) => {
   // Set cookies and return response
   return res
     .status(201)
-    .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-    .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
+    // .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+    // .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
     .json(
       new ApiResponse(
         201,
@@ -299,8 +299,8 @@ const loginCompany = asyncHandler(async (req, res) => {
   // Set access and refresh token in cookie
   return res
     .status(200)
-    .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-    .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
+    // .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+    // .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
     .json(
       new ApiResponse(
         200,
@@ -385,8 +385,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
     return res
       .status(200)
-      .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-      .cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions())
+      // .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
+      // .cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions())
       .json(
         new ApiResponse(
           200,
