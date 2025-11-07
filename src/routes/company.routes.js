@@ -46,10 +46,12 @@ router.route("/auth/login").post(loginCompany);
 // GET /api/v1/companies/auth/google
 router
   .route("/auth/google")
-  .get(passport.authenticate("google", { scope: ["profile", "email"] }));
+  .get(passport.authenticate("google", 
+    { scope: ["profile", "email"], session: false }));
 router.route("/auth/google/callback").get(
   passport.authenticate("google", {
     failureRedirect: "/login?error=auth_failed",
+    session: false,
   }),
   googleLoginCallback
 );
