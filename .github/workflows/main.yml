@@ -10,42 +10,58 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # 1. Checkout latest code
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 2. Clear npm cache (on runner, not inside container)
+      - name: Clear npm cache
+        run: |
+          echo "Clearing npm cache..."
+          npm cache clean --force
+
+      # 4. Create .env file dynamically from GitHub Secrets
       - name: Create .env file from GitHub Secrets
         run: |
           echo "${{ secrets.DOCKER_ENV_FILE }}" > /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs/.env
           echo ".env file created successfully."
 
-      - name: Build Docker Image
-        run: |
-          cd /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs
-
-          sudo -u jazzam docker build --no-cache -t jazzam-nodejs-image:latest .
-
-
+      # 5. Stop & Remove Existing Container (if running)
       - name: Stop & Remove Existing Container
         run: |
           CONTAINER_ID=$(sudo -u jazzam docker ps -aq --filter "name=jazzam-backend-container")
           if [ ! -z "$CONTAINER_ID" ]; then
+            echo "Stopping existing container..."
             sudo -u jazzam docker stop jazzam-backend-container
             sudo -u jazzam docker rm jazzam-backend-container
           fi
 
+      # 6. Build Docker Image without using cache
+      - name: Build Docker Image (no cache)
+        run: |
+          cd /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs
+          echo "Building Docker image without cache..."
+          sudo -u jazzam docker build --no-cache -t jazzam-nodejs-image:latest .
+
+      # 7. Run New Container
       - name: Run New Container
         run: |
+          echo "Running new container..."
           sudo -u jazzam docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
 
-      - name: Prune Unused Images & Containers
+      # 8. Prune Unused Docker Images, Containers & Volumes
+      - name: Prune Unused Docker Resources
         run: |
-          sudo -u jazzam docker system prune -af
+          echo "Cleaning up unused Docker resources..."
+          sudo -u jazzam docker system prune -af --volumes
 
   nginx:
     runs-on: self-hosted
     needs: build
     steps:
-      - name: Nginx Configuration
+      - name: Validate and Restart Nginx
         run: |
+          echo "Testing Nginx configuration..."
           sudo nginx -t
+          echo "Restarting Nginx..."
           sudo systemctl restart nginx
