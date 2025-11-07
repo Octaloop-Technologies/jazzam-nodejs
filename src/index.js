@@ -8,7 +8,7 @@ connectDB()
   .then(() => {
     app.listen(process.env.PORT || 4000, () => {
       console.log(
-        `Server running on port http://localhost:${process.env.PORT || 4000}\n`
+        `Server running on port ************ http://localhost:${process.env.PORT || 4001}\n`
       );
     });
   })
