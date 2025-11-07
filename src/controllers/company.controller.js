@@ -45,6 +45,8 @@ const handleSuccessfulOAuth = async (
   provider,
   additionalParams = {}
 ) => {
+  console.log("🔍 handleSuccessfulOAuth called - checking for cookie code...");
+console.log("🔍 Cookie code should be commented out");
   try {
     // Generate authentication tokens
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
