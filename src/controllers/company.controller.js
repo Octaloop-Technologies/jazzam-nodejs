@@ -74,6 +74,8 @@ console.log("🔍 Cookie code should be commented out");
 
     const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
 
+    console.log("🔍 Redirect URL******:", redirectUrl);
+
     // res.cookie('accessToken', accessToken, securityConfig.session.cookie);
 
     // res.cookie('refreshToken', refreshToken, securityConfig.session.cookie);
