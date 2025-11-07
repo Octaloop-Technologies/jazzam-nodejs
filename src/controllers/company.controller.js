@@ -45,6 +45,8 @@ const handleSuccessfulOAuth = async (
   provider,
   additionalParams = {}
 ) => {
+  console.log("🔍 handleSuccessfulOAuth called - checking for cookie code...");
+console.log("🔍 Cookie code should be commented out");
   try {
     // Generate authentication tokens
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
@@ -70,7 +72,7 @@ const handleSuccessfulOAuth = async (
     //   path: redirectPath,
     // });
 
-    const redirectUrl = `${process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:3000"}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+    const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
 
     // res.cookie('accessToken', accessToken, securityConfig.session.cookie);
 
