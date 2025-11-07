@@ -44,9 +44,7 @@ const app = express();
 // ==========================================================
 // Trust proxy - Required when behind reverse proxy/load balancer
 // ==========================================================
-if (process.env.NODE_ENV === "production") {
-  app.set('trust proxy', true);
-}
+app.set('trust proxy', true);
 
 
 // ==========================================================
