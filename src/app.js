@@ -41,7 +41,12 @@ const app = express();
 //   cors: corsOptions
 // });
 
-
+// ==========================================================
+// Trust proxy - Required when behind reverse proxy/load balancer
+// ==========================================================
+if (process.env.NODE_ENV === "production") {
+  app.set('trust proxy', true);
+}
 
 
 // ==========================================================
