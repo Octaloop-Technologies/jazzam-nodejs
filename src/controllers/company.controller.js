@@ -72,7 +72,7 @@ console.log("🔍 Cookie code should be commented out");
     //   path: redirectPath,
     // });
 
-    const redirectUrl = `${process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:3000"}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+    const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
 
     // res.cookie('accessToken', accessToken, securityConfig.session.cookie);
 
