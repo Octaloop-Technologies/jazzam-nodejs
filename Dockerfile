@@ -1,5 +1,5 @@
 
-FROM node:20-alpine
+FROM node:latest-alpine
 
 # Set the working directory in the contain
 WORKDIR /app
