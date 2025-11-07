@@ -23,7 +23,7 @@ jobs:
       # 4. Create .env file dynamically from GitHub Secrets
       - name: Create .env file from GitHub Secrets
         run: |
-          echo "${{ secrets.DOCKER_ENV_FILE }}" > /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzaam-nodejs/jazzaam-nodejs/.env
+          echo "${{ secrets.DOCKER_ENV_FILE }}" > /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs/jazzam-nodejs/.env
           echo ".env file created successfully."
 
       # 5. Stop & Remove Existing Container (if running)
