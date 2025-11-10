@@ -10,10 +10,7 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      # 1. Clean up node_modules (if any)
-      - name: Clean up node_modules
-        run: sudo rm -rf /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs/jazzam-nodejs/node_modules
-
+      
       # 2. Set proper permissions for runner
       - name: Set proper permissions for runner
         run: sudo chown -R $USER:$USER /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs
