@@ -526,8 +526,8 @@ class EmailService {
 
   // Build mail options for follow-up email
   #buildInvitationEmailOptions(receiverEmail, link, name) {
-    const companyName = "Our Company";
-    const subject = "Invitation Link";
+    const companyName = "Jazzam";
+    const subject = "Invitation Link for join our company";
     const message = "I'm excited to invite you to join our company. Here's your personal invitation link:";
 
     return {
