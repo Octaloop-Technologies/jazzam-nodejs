@@ -55,7 +55,7 @@ jobs:
       - name: Run New Container
         run: |
           echo "Running new container..."
-          sudo -u jazzam docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
+          sudo -u jazzam docker run -d --env-file .env -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
 
       # 9. Prune Unused Docker Resources
       - name: Prune Unused Docker Resources
