@@ -51,6 +51,10 @@ class ScrapingService {
             userName
           ]
         }
+      }else if(formType === 'linkedIn'){
+        input = {
+          profileUrls: [url]
+        }
       }
 
       // if (proxyFormat === 'proxy') {

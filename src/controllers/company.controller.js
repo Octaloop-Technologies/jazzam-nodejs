@@ -826,7 +826,7 @@ const updateSettings = asyncHandler(async (req, res) => {
 const companyTeamsMembers = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url");
+    const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus");
     return res.status(200).json({ success: true, message: "Team members retrieved successfully", data: company });
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -883,8 +883,9 @@ const activateTeamMember = asyncHandler(async (req, res) => {
 
 
 const getJoinedCompany = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  console.log("id******", id)
   try {
-    const { id } = req.params;
     const companyId = req.company?._id;
     const company = await Company.findOne({ _id: id }, { email: 1, companyName: 1 }).populate("joinedCompanies", "_id email companyName logo.url joinedCompanyStatus")
     if (company) {

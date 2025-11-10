@@ -52,6 +52,7 @@ const sendInvitation = asyncHandler(async (req, res) => {
     });
 
     const inviteLink = `${process.env.CLIENT_URL}/super-user/invitation/token=${token}`;
+    console.log("invitation link:**********", inviteLink)
 
     emailService.sendInvitationEmail(receiver?.companyName, receiver?.email, inviteLink);
 
@@ -60,6 +61,7 @@ const sendInvitation = asyncHandler(async (req, res) => {
 
     return res.status(200).json({ success: true, message: "Invitation sent successfully" });
   } catch (error) {
+    console.log("error*******", error)
     return res.status(500).json({ success: false, message: "Something went wrong" })
   }
 });
