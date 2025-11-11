@@ -25,6 +25,19 @@ const companySchema = new Schema(
       required: [true, "Password is required"],
     },
 
+    // user type
+    userType: {
+      enum: ["user", "company"],
+      type: String,
+      default: "user"
+    },
+
+    // user first time login
+    userFirstLogin: {
+      type: Boolean,
+      default: true
+    },
+
     // Company Details
     website: {
       type: String,

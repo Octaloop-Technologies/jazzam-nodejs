@@ -795,7 +795,7 @@ const deleteCompany = asyncHandler(async (req, res) => {
     .status(200)
     // .clearCookie("accessToken", getClearAccessTokenCookieOptions())
     // .clearCookie("refreshToken", getClearRefreshTokenCookieOptions())
-    .json(new ApiResponse(200, null, "Company deleted successfully"));
+    .json({ success: true, message: "Company deleted successfully" });
 });
 
 // ==============================================================
@@ -920,6 +920,27 @@ const changeCompanyName = asyncHandler(async (req, res) => {
       error.message || "Failed to get team members"
     );
   }
+});
+
+const updateUserType = asyncHandler(async(req, res) => {
+  try {
+    const userId = req.params?.id;
+    const { userType } = req.body;
+    const user = await Company.findById(userId);
+    if(!user){
+      return res.status(400).json({ success: false, message: "User not found" });
+    }
+    user.userType = userType;
+    user.userFirstLogin = false;
+    await user.save();
+    return res.status(200).json({ success: true, message: "User type updated" });
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
 })
 
 export {
@@ -944,5 +965,6 @@ export {
   deactivateTeamMember,
   activateTeamMember,
   getJoinedCompany,
-  changeCompanyName
+  changeCompanyName,
+  updateUserType
 };
