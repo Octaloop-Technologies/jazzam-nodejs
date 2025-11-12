@@ -628,6 +628,7 @@ class EmailService {
           <p>Hi ${name} ,</p>
           <p>${message}</p>
           <p>${link}</p>
+          <p>Note:- Please login to your account to access the invitation link.</p>
           <p>Best regards,<br>The ${companyName} Team</p>
         </div>
       </body>
