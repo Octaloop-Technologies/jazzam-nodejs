@@ -21,6 +21,7 @@ import {
   deactivateTeamMember,
   activateTeamMember,
   changeCompanyName,
+  updateUserType,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -102,6 +103,9 @@ router.route("/auth/update-company").patch(updateCompanyDetails);
 
 // PATCH /api/v1/companies/auth/onboarding
 router.route("/auth/onboarding").patch(updateOnboardingStatus);
+
+// PATCH /api/v1/companies/auth/update-user-type
+router.route("/auth/update-user-type/:id").patch(updateUserType)
 
 // ================================================
 // Company settings routes

@@ -25,8 +25,8 @@ const sendInvitation = asyncHandler(async (req, res) => {
     }
 
     // Check if receiver company exists
-    const receiver = await Company.findOne({ email: receiverEmail });
-    if (!receiver) return res.status(404).json({ message: "Receiver company not found" });
+    const receiver = await Company.findOne({ email: receiverEmail, userType: "user" });
+    if (!receiver) return res.status(404).json({ message: "User not found" });
 
     // Ensure receiver is not already joined anywhere
     if ((receiver.joinedCompanies !== null || undefined) && receiver?.joinedCompanyStatus === true) {
