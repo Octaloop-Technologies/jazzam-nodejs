@@ -1,14 +1,14 @@
 
-FROM node:20-alpine
+FROM node:latest
 
-# Set the working directory in the container
+# Set the working directory in the contain
 WORKDIR /app
 
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
 # Install any dependencies
-RUN npm install
+RUN npm install --no-cache
 
 # Copy the rest of the application code
 COPY . .

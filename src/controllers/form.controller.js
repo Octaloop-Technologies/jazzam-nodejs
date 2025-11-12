@@ -474,6 +474,18 @@ const submitFormData = asyncHandler(async (req, res) => {
           console.log(
             `✅ Lead notification email sent to company: ${form.companyId.email}`
           );
+          
+          // Create and emit real-time notification
+          const newNotification = await Notification.create({
+            companyId: form.companyId,
+            title: "New Qualified Lead",
+            message: `Welcome email sent to ${lead.firstName || lead.fullName || 'New lead'} from ${form.formType} platform`
+          });
+
+          // Emit notification to all connected clients of this company
+          req.io.emit(`notification-${form.companyId}`, newNotification);
+          console.log(`🔔 Real-time notification sent for company: ${form.companyId}`);
+
         } catch (error) {
           console.error(
             "Failed to send lead notification email to company:",
@@ -504,13 +516,6 @@ const submitFormData = asyncHandler(async (req, res) => {
   } else {
     console.log("Scraping skipped - either disabled or custom form type");
   }
-  // const newNotification = await Notification.create({
-  //   companyId: form?.companyId,
-  //   title: "New Lead",
-  //   message: `New lead created for ${form?.formType} platform`
-  // });
-  // // Emit new notification via Socket.io
-  // req.io.emit("new-notification", newNotification)
   return res
     .status(200)
     .json(new ApiResponse(200, { formData }, "Form submitted successfully"));
