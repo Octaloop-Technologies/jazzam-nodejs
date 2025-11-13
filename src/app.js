@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-// import http from "http";
+import http from "http";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "./config/passport.js";
@@ -27,7 +27,7 @@ import {
 } from "./config/swagger-simple.config.js";
 import cron from "node-cron";
 import { scheduledLeads } from "./controllers/lead.controller.js";
-// import { Server } from "socket.io";
+import { Server } from "socket.io";
 
 
 
@@ -36,10 +36,10 @@ import { scheduledLeads } from "./controllers/lead.controller.js";
 // Setup socket io
 // ==========================================================
 const app = express();
-// const server = http.createServer(app);
-// const io = new Server(server, {
-//   cors: corsOptions
-// });
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: corsOptions
+});
 
 // ==========================================================
 // Trust proxy - Required when behind reverse proxy/load balancer
@@ -66,10 +66,10 @@ app.use(cors(corsOptions)); // CORS configuration
 app.use(generalRateLimit); // General rate limiting
 
 // Attach io to req so routes can emit events
-// app.use((req, res, next) => {
-//   req.io = io;
-//   next();
-// });
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 // cron job for followup scheduling
 cron.schedule("0 0 * * *", scheduledLeads, {
@@ -78,13 +78,13 @@ cron.schedule("0 0 * * *", scheduledLeads, {
 })
 
 // Socket.IO connection
-// io.on("connection", (socket) => {
-//   console.log("A user connected:", socket.id);
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
 
-//   socket.on("disconnect", () => {
-//     console.log("User disconnected:", socket.id);
-//   });
-// });
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
+});
 
 
 // Raw body for Stripe webhooks (before JSON parsing)
@@ -217,4 +217,4 @@ app.use("/api/v1/notifications", notificationsRoute)
 app.use(notFoundHandler); // Handle 404s
 app.use(errorHandler); // Handle all other errors
 
-export { app };
+export { app, server };

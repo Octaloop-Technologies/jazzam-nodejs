@@ -11,6 +11,6 @@ const router = Router();
 router.use(verifyJWT);
 
 // /api/v1/notifications/get-notifications
-router.route('/get-notifications').get(allNotifications);
+router.route('/get-notifications/:id').get(allNotifications);
 
 export default router;
