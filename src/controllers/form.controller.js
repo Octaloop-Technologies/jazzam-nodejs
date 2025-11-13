@@ -479,12 +479,12 @@ const submitFormData = asyncHandler(async (req, res) => {
           const newNotification = await Notification.create({
             companyId: form.companyId,
             title: "New Qualified Lead",
-            message: `Welcome email sent to ${lead.firstName || lead.fullName || 'New lead'} from ${form.formType} platform`
+            message: `New lead created using ${form.formType} platform for ${lead.email}`
           });
 
           // Emit notification to all connected clients of this company
-          req.io.emit(`notification-${form.companyId}`, newNotification);
-          console.log(`🔔 Real-time notification sent for company: ${form.companyId}`);
+          req.io.emit(`notifications`, newNotification);
+          console.log(`🔔 Real-time notification sent for company`);
 
         } catch (error) {
           console.error(

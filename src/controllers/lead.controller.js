@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import bantService from "../services/bant.service.js";
 import FollowUp from "../models/followUp.model.js";
 import emailService from "../services/email.service.js";
+import Notification from "../models/notifications.model.js";
 
 // ==============================================================
 // Lead Controller Functions
@@ -454,6 +455,15 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
       dateOfSubmission: new Date
     }
     const newLeadFollowup = await FollowUp.create(followUpData);
+    // Create and emit real-time notification
+    const newNotification = await Notification.create({
+      companyId: lead?.companyId,
+      title: "New Qualified Lead",
+      message: `Follow up sent to ${lead.email}`
+    });
+    // Emit notification to all connected clients of this company
+    req.io.emit(`notifications`, newNotification);
+    console.log(`🔔 Real-time notification sent for company`);
     return res.status(201).json({
       success: true,
       message: "Leads follow up created successfully",
