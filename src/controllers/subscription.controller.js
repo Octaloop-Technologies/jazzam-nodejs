@@ -144,6 +144,7 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
         company.subscriptionStartDate = paymentData.currentPeriodStart;
         company.subscriptionEndDate = paymentData.currentPeriodEnd;
         company.paymentMethod = "stripe";
+        company.subscriptionSeats = paymentData.plan === "starter" ? 1 : paymentData.plan === "pro" ? 3 : ''
         company.paymentDetails = {
           ...company.paymentDetails,
           stripeCustomerId: paymentData.customerId,
