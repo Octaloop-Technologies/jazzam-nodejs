@@ -446,6 +446,8 @@ const submitFormData = asyncHandler(async (req, res) => {
         status: "new",
       };
 
+      console.log("scrapped Data****************:", scrapedData);
+
       const lead = await Lead.create(leadData);
 
       // Send welcome email to lead if enabled and lead has email
