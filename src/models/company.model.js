@@ -231,11 +231,11 @@ const companySchema = new Schema(
     // Team management
     subscriptionSeats: {
       type: Number,
-      default: 1, // Owner + additional seats
+      default: 0, // Owner + additional seats
     },
     usedSeats: {
       type: Number,
-      default: 1, // Owner counts as 1 seat
+      default: 0, // Owner counts as 1 seat
     },
     joinedCompanies:
     {
