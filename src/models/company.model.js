@@ -130,7 +130,7 @@ const companySchema = new Schema(
       },
       autoBANTQualification: {
         type: Boolean,
-        default: false,
+        default: true,
       },
     },
 
