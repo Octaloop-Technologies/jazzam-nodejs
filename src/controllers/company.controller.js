@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Validator } from "../utils/validator.js";
+import { Lead } from "../models/lead.model.js";
+import FollowUp from "../models/followUp.model.js";
 // import {
 //   getAccessTokenCookieOptions,
 //   getRefreshTokenCookieOptions,
@@ -46,7 +48,7 @@ const handleSuccessfulOAuth = async (
   additionalParams = {}
 ) => {
   console.log("🔍 handleSuccessfulOAuth called - checking for cookie code...");
-console.log("🔍 Cookie code should be commented out");
+  console.log("🔍 Cookie code should be commented out");
   try {
     // Generate authentication tokens
     const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
@@ -129,34 +131,66 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
       .populate("joinedCompanies", "_id companyName email logo.url")
       .lean();
 
-    console.log("company******", company)
-
     if (!company) return res.status(404).json({ message: "Company not found" });
 
-    return res
-      .status(201)
-      .json(
-        new ApiResponse(
-          201,
-          {
-            ownCompany: {
-              _id: company._id,
-              name: company.companyName,
-              email: company.email,
-              logo: company?.logo?.url
-            },
-            joinedCompanies: {
-              _id: company.joinedCompanies._id,
-              name: company.joinedCompanies.companyName,
-              email: company.joinedCompanies.email,
-              logo: company.joinedCompanies.logo?.url
-            }
-          },
-          "User companies retrieved successfully"
-        )
-      );
+    // Dashboard stats
+    const totalLeads = await Lead.countDocuments({ companyId: company._id });
+    const qualifiedLeads = await Lead.countDocuments({
+      companyId: company._id,
+      $or: [
+        { status: "qualified" },
+        { "bant.totalScore": { $gte: 60 } },
+        { "bant.category": { $in: ["hot", "warm"] } },
+        { status: "hot" }
+      ],
+    });
 
+    const leadFollowUpsSent = await Lead.countDocuments({
+      companyId: company._id,
+      "emailStatus.followUpSent": true,
+    });
+
+    const followUpRecordsSubmitted = await FollowUp.countDocuments({
+      companyId: company._id,
+      status: "submitted",
+    });
+
+    const followUpsSent = leadFollowUpsSent + followUpRecordsSubmitted;
+
+    const convertedLeads = await Lead.countDocuments({
+      companyId: company._id,
+      "conversionData.converted": true,
+    });
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          ownCompany: {
+            _id: company._id,
+            name: company.companyName,
+            email: company.email,
+            logo: company?.logo?.url,
+          },
+          // joinedCompanies: {
+          //   _id: company.joinedCompanies,
+          //   name: company.joinedCompanies.companyName,
+          //   email: company.joinedCompanies.email,
+          //   logo: company.joinedCompanies.logo?.url,
+          // },
+          stats: {
+            totalLeads,
+            qualifiedLeads,
+            followUpsSent,
+            estimatedCloseRate: 0,
+            convertedLeads,
+          },
+        },
+        "Company dashboard retrieved successfully"
+      )
+    );
   } catch (error) {
+    console.log("error*********", error)
     throw new ApiError(500, "Error while calling function for get dashboard");
   }
 })
@@ -922,12 +956,12 @@ const changeCompanyName = asyncHandler(async (req, res) => {
   }
 });
 
-const updateUserType = asyncHandler(async(req, res) => {
+const updateUserType = asyncHandler(async (req, res) => {
   try {
     const userId = req.params?.id;
     const { userType } = req.body;
     const user = await Company.findById(userId);
-    if(!user){
+    if (!user) {
       return res.status(400).json({ success: false, message: "User not found" });
     }
     user.userType = userType;
