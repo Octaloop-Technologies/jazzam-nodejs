@@ -485,7 +485,7 @@ const submitFormData = asyncHandler(async (req, res) => {
           });
 
           // Emit notification to all connected clients of this company
-          req.io.emit(`notifications`, newNotification);
+          req.io.emit(`notifications`, { action: "newNotification", notification: newNotification});
           console.log(`🔔 Real-time notification sent for company`);
 
         } catch (error) {

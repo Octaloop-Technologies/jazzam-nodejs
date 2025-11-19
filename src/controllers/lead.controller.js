@@ -134,7 +134,7 @@ const getLeadById = asyncHandler(async (req, res) => {
 // Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, notes, tags, leadScore, qualificationScore, bant } = req.body;
+  const { companyId,  status, notes, tags, leadScore, qualificationScore, bant } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid lead ID");
@@ -158,7 +158,7 @@ const updateLeadById = asyncHandler(async (req, res) => {
     }
 
     const updatedLead = await Lead.findOneAndUpdate(
-      { _id: id, companyId: req.company._id },
+      { _id: id, companyId },
       { $set: updateFields },
       { new: true }
     );
@@ -462,7 +462,7 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
       message: `Follow up sent to ${lead.email}`
     });
     // Emit notification to all connected clients of this company
-    req.io.emit(`notifications`, newNotification);
+    req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
     console.log(`🔔 Real-time notification sent for company`);
     return res.status(201).json({
       success: true,
