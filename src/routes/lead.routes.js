@@ -23,7 +23,7 @@ const router = Router();
 // ================================================
 // Update lead bant object
 // PATCH /api/v1/lead/:id
-router.route("/").patch(updateLeadById);
+router.route("/:id").patch(updateLeadById);
 
 // ================================================
 // Protected routes - Require authentication
