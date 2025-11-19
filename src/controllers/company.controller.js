@@ -182,7 +182,7 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
             totalLeads,
             qualifiedLeads,
             followUpsSent,
-            estimatedCloseRate: 0,
+            estimatedCloseRate: qualifiedLeads && totalLeads ? ((qualifiedLeads / totalLeads) * 100).toFixed(2) : 0,
             convertedLeads,
           },
         },
@@ -935,9 +935,7 @@ const getJoinedCompany = asyncHandler(async (req, res) => {
 });
 
 const changeCompanyName = asyncHandler(async (req, res) => {
-  console.log("suskksks", req.body);
   const companyId = req.company?._id;
-  console.log("companyId", companyId);
   try {
     const { companyName } = req.body;
     const companyId = req.company?._id;
