@@ -506,8 +506,15 @@ const followUpEmail = asyncHandler(async (req, res) => {
 // get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
-    const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company?._id;
-    const followupLeadsData = await FollowUp.find({ companyId }).populate("leadId", "profilePic fullName company email");
+    const { companyId, status } = req.query;
+    const companyObjId = mongoose.Types.ObjectId.isValid(companyId) 
+    ? new mongoose.mongo.ObjectId(companyId) : req.company?._id;
+    let filter = { companyId: companyObjId };
+    if(status !== "all") filter.status = status
+
+    console.log("filter*******", filter)
+
+    const followupLeadsData = await FollowUp.find(filter).populate("leadId", "profilePic fullName company email");
     return res
       .status(200)
       .json(

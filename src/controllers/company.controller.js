@@ -135,6 +135,12 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
 
     // Dashboard stats
     const totalLeads = await Lead.countDocuments({ companyId: company._id });
+
+    // new: counts by status
+    const hotLeads = await Lead.countDocuments({ companyId: company._id, status: "hot" });
+    const warmLeads = await Lead.countDocuments({ companyId: company._id, status: "warm" });
+    const coldLeads = await Lead.countDocuments({ companyId: company._id, status: "cold" });
+
     const qualifiedLeads = await Lead.countDocuments({
       companyId: company._id,
       $or: [
@@ -172,14 +178,11 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
             email: company.email,
             logo: company?.logo?.url,
           },
-          // joinedCompanies: {
-          //   _id: company.joinedCompanies,
-          //   name: company.joinedCompanies.companyName,
-          //   email: company.joinedCompanies.email,
-          //   logo: company.joinedCompanies.logo?.url,
-          // },
           stats: {
             totalLeads,
+            hotLeads,
+            warmLeads,
+            coldLeads,
             qualifiedLeads,
             followUpsSent,
             estimatedCloseRate: qualifiedLeads && totalLeads ? ((qualifiedLeads / totalLeads) * 100).toFixed(2) : 0,
@@ -194,6 +197,7 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Error while calling function for get dashboard");
   }
 })
+// ...existing code...
 
 const registerCompany = asyncHandler(async (req, res) => {
   const { companyName, email, password, website, industry, contactPerson } =
