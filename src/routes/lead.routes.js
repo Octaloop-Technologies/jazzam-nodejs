@@ -14,6 +14,7 @@ import {
   followUpLeads,
   scheduleFollowUpLeads,
   createLeadFollowup,
+  exportLeadsExcel,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -76,9 +77,15 @@ router.route("/:id").delete(deleteLead);
 router.route("/create-followup/:id").post(createLeadFollowup)
 
 // lead follow up email
+// POST /api/v1/lead/followUpEmail
 router.route("/follow-up/:id").post(followUpEmail)
 
 // schedule followup lead
-router.route("/schedule-follow-up/:id").post(scheduleFollowUpLeads) 
+// POST /api/v1/lead/scheduleFolloUpLeads
+router.route("/schedule-follow-up/:id").post(scheduleFollowUpLeads);
+
+// download leads in excelsheet
+// GET /api/v1/get-excel-file
+router.route("/get-excel-file/:id").get(exportLeadsExcel)
 
 export default router;

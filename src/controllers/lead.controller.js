@@ -7,6 +7,7 @@ import bantService from "../services/bant.service.js";
 import FollowUp from "../models/followUp.model.js";
 import emailService from "../services/email.service.js";
 import Notification from "../models/notifications.model.js";
+import ExcelJs from "exceljs";
 
 // ==============================================================
 // Lead Controller Functions
@@ -134,7 +135,7 @@ const getLeadById = asyncHandler(async (req, res) => {
 // Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { companyId,  status, notes, tags, leadScore, qualificationScore, bant } = req.body;
+  const { companyId, status, notes, tags, leadScore, qualificationScore, bant } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid lead ID");
@@ -558,7 +559,6 @@ const scheduleFollowUpLeads = asyncHandler(async (req, res) => {
 });
 
 // cron job function for scheduled follow up leads
-
 const scheduledLeads = async () => {
   console.log("🕛 Running daily follow-up email cron job:", new Date().toISOString());
 
@@ -605,6 +605,74 @@ const scheduledLeads = async () => {
     console.error("❌ Error in follow-up email cron job:", error);
   }
 }
+
+// Export leads Excel - filter by status
+const exportLeadsExcel = asyncHandler(async (req, res) => {
+  const companyId = req.params;
+  const { status } = req.query;
+
+  const companyObjId = mongoose.Types.ObjectId.isValid(companyId)
+    ? new mongoose.mongo.ObjectId(companyId)
+    : req.company?._id;
+
+  const filter = { companyId: companyObjId };
+  if (status !== "overall") filter.status = status;
+
+  const leads = await Lead.find(filter).select(
+    "fullName email company profileUrl platform status createdAt leadScore companyIndustry companySize location tags"
+  ).lean();
+
+
+
+  // create excel workbook
+  const workbook = new ExcelJs.Workbook();
+  const sheet = workbook.addWorksheet("Leads");
+
+  sheet.columns = [
+    { header: "Name", key: "fullName", width: 30 },
+    { header: "Email", key: "email", width: 30 },
+    { header: "Company", key: "company", width: 30 },
+    { header: "Profile URL", key: "profileUrl", width: 50 },
+    { header: "Platform", key: "platform", width: 20 },
+    { header: "Status", key: "status", width: 15 },
+    { header: "Lead Score", key: "leadScore", width: 12 },
+    { header: "Industry", key: "companyIndustry", width: 20 },
+    { header: "Company Size", key: "companySize", width: 15 },
+    { header: "Location", key: "location", width: 20 },
+    { header: "Tags", key: "tags", width: 30 },
+    { header: "Created At", key: "createdAt", width: 22 },
+  ];
+
+  leads.forEach((l) => {
+    sheet.addRow({
+      fullName: l.fullName || "",
+      email: l.email || "",
+      company: (l.company && (typeof l.company === "string" ? l.company : l.company.companyName)) || "",
+      profileUrl: l.profileUrl || l.platformUrl || "",
+      platform: l.platform || "",
+      status: l.status || "",
+      leadScore: l.leadScore ?? "",
+      companyIndustry: l.companyIndustry || "",
+      companySize: l.companySize || "",
+      location: l.location || "",
+      tags: Array.isArray(l.tags) ? l.tags.join(", ") : (l.tags || ""),
+      createdAt: l.createdAt ? new Date(l.createdAt).toISOString() : "",
+    });
+  });
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="leads-${status}-${Date.now()}.xlsx"`
+  );
+
+  const data = await workbook.xlsx.write(res);
+  res.end();
+
+})
 
 
 
@@ -786,5 +854,6 @@ export {
   followUpLeads,
   scheduleFollowUpLeads,
   scheduledLeads,
-  createLeadFollowup
+  createLeadFollowup,
+  exportLeadsExcel
 };
