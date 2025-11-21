@@ -506,15 +506,72 @@ const followUpEmail = asyncHandler(async (req, res) => {
 // get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
-    const { companyId, status } = req.query;
+    const { companyId, status, search, page = 1 } = req.query;
+    const limit = 5;
+    const skip = (page - 1) * limit;
     const companyObjId = mongoose.Types.ObjectId.isValid(companyId) 
-    ? new mongoose.mongo.ObjectId(companyId) : req.company?._id;
+    ? new mongoose.Types.ObjectId(companyId) : req.company?._id;
     let filter = { companyId: companyObjId };
     if(status !== "all") filter.status = status
+    if(search) filter.$or = [
+      { "leadId.fullName": { $regex: search, $options: "i" } },
+      { "leadId.email": { $regex: search, $options: "i" } },
+    ] 
 
-    console.log("filter*******", filter)
+    // const totalRecordsArr = await FollowUp.aggregate([
+    //   {
+    //     $lookup: {
+    //       from: "leads",
+    //       localField: "leadId",
+    //       foreignField: "_id",
+    //       as: "leadId"
+    //     }
+    //   },
+    //   { $unwind: "leadId" },
+    //   { $match: filter },
+    //   { $count: "total" }
+    // ]);
 
-    const followupLeadsData = await FollowUp.find(filter).populate("leadId", "profilePic fullName company email");
+    // const totalRecords = totalRecordsArr.length ? totalRecordsArr[0].total : 0;
+    // const totalPages = Math.ceil(totalRecords  / limit)
+
+    const followupLeadsData = await FollowUp.aggregate([
+      {
+        $lookup: {
+          from: "leads",
+          localField: "leadId",
+          foreignField: "_id",
+          as: "leadId"
+        }
+      },
+      { $unwind: "$leadId" },
+      { $match: filter },
+      // { $skip: skip },
+      // { $limit: limit },
+      { 
+        $project: {
+        _id: 1,
+        companyId: 1,
+        channel: 1,
+        subject: 1,
+        message: 1,
+        status: 1,
+        scheduleDate: 1,
+        scheduled: 1,
+        dateOfSubmission: 1,
+        createdAt: 1,
+        updatedAt: 1,
+
+        leadId: {
+          _id:1,
+          profilePic: 1,
+          fullName: 1,
+          email: 1,
+          company: 1,
+        }
+      } 
+    }
+    ])
     return res
       .status(200)
       .json(
