@@ -459,7 +459,7 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
     // Create and emit real-time notification
     const newNotification = await Notification.create({
       companyId: lead?.companyId,
-      title: "New Qualified Lead",
+      title: "Follow Up Sent",
       message: `Follow up sent to ${lead.email}`
     });
     // Emit notification to all connected clients of this company
