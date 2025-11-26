@@ -480,7 +480,7 @@ const submitFormData = asyncHandler(async (req, res) => {
           // Create and emit real-time notification
           const newNotification = await Notification.create({
             companyId: form.companyId,
-            title: "New Qualified Lead",
+            title: "Newly Generated Lead",
             message: `New lead created using ${form.formType} platform for ${lead.email}`
           });
 
