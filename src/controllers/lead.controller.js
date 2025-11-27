@@ -546,6 +546,7 @@ const followUpLeads = asyncHandler(async (req, res) => {
       },
       { $unwind: "$leadId" },
       { $match: filter },
+      { $sort: { createdAt: -1 } },
       // { $skip: skip },
       // { $limit: limit },
       { 
