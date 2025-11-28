@@ -164,6 +164,17 @@ const updateLeadById = asyncHandler(async (req, res) => {
       { new: true }
     );
 
+    if(status === "qualified") {
+      // Create and emit real-time notification
+      const newNotification = await Notification.create({
+        companyId,
+        title: "Lead Qualified",
+        message: `A ${updatedLead?.fullName} as a lead has been qualified.`
+      });
+      req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
+      console.log(`🔔 Real-time notification sent for company`);
+    }
+
     if (!updatedLead) {
       throw new ApiError(404, "Lead not found");
     }

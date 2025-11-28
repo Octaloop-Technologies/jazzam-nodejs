@@ -215,8 +215,7 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
         const company = await Company.findOne({
           "paymentDetails.stripeCustomerId": invoice.customer,
         });
-        const billingHistory = await BillingHistory.findOne({ userId: company?._id,  }).sort({ createdAt: -1 });
-
+        const billingHistory = await BillingHistory.findOne({ userId: company?._id }).sort({ createdAt: -1 });
 
         if (company) {
           company.paymentDetails.lastPaymentDate = new Date();
@@ -224,7 +223,15 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
           await company.save();
           billingHistory.status = "paid";
           billingHistory.amount = invoice.amount_paid / 100;
-          await billingHistory.save()
+          await billingHistory.save();
+          // Create and emit real-time notification
+          const newNotification = await Notification.create({
+            companyId: company._id,
+            title: "Payment Successful",
+            message: `A payment of $${(invoice.amount_paid / 100).toFixed(2)} was successfully processed.`
+          });
+          req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
+          console.log(`🔔 Real-time notification sent for company`);
         }
         break;
       }
@@ -417,11 +424,11 @@ const createBillingPortal = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { url }, "Billing portal session created"));
 });
 
-const subscriptionHistory = async(req, res) => {
+const subscriptionHistory = async (req, res) => {
   try {
     const { id } = req.params;
     const billingHistory = await BillingHistory.find({ userId: id });
-    if(!billingHistory){
+    if (!billingHistory) {
       return res.status(404).json({ success: false, message: "Billing history not found" })
     }
     return res.status(200).json({ success: true, message: "Billing history retrieved successfully", data: billingHistory })
