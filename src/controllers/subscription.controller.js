@@ -19,6 +19,7 @@ import {
   isPayfortConfigured,
 } from "../services/payfort.service.js";
 import { BillingHistory } from "../models/billingHistory.model.js";
+import Notification from "../models/notifications.model.js";
 
 // ==============================================================
 // Checkout Session Creation
@@ -226,7 +227,7 @@ const handleStripeWebhook = asyncHandler(async (req, res) => {
           await billingHistory.save();
           // Create and emit real-time notification
           const newNotification = await Notification.create({
-            companyId: company._id,
+            companyId: company?._id,
             title: "Payment Successful",
             message: `A payment of $${(invoice.amount_paid / 100).toFixed(2)} was successfully processed.`
           });
