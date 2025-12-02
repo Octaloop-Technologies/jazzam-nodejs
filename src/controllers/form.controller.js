@@ -11,6 +11,7 @@ import { syncLeadToCrm } from "../services/crm/sync.service.js";
 import FollowUp from "../models/followUp.model.js";
 import mongoose from "mongoose";
 import Notification from "../models/notifications.model.js";
+// import dealHealthService from "../services/dealHealth.service.js";
 
 // ==============================================================
 // Form Management Functions
@@ -456,6 +457,14 @@ const submitFormData = asyncHandler(async (req, res) => {
           await emailService.sendWelcomeEmail(lead, form);
           await lead.updateEmailStatus("welcome", true);
           console.log(`✅ Welcome email sent to lead: ${lead.email}`);
+          // After lead creation and email sending:
+          // await dealHealthService.logEngagement(lead.companyId, lead._id, {
+          //   engagementType: "email_sent",
+          //   emailMetrics: {
+          //     subject: emailSubject,
+          //     sentAt: new Date()
+          //   }
+          // })
         } catch (error) {
           console.error("Failed to send welcome email to lead:", error);
         }

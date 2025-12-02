@@ -75,7 +75,22 @@ app.use((req, res, next) => {
 cron.schedule("0 0 * * *", scheduledLeads, {
   scheduled: true,
   timezone: "Asia/Riyadh"
-})
+});
+
+// Daily health recalculation at 2 AM
+// cron.schedule("0 2 * * *", async () => {
+//   console.log("🕛 Running daily deal health recalculation:", new Date().toISOString());
+//   try {
+//     const companies = await Company.find();
+//     for (const company of companies) {
+//       await dealHealthService.batchCalculateHealth(company._id);
+//     }
+//   } catch (error) {
+//     console.error("❌ Health recalculation failed:", error);
+//   }
+// }, {
+//   timezone: "Asia/Riyadh"
+// });
 
 // Socket.IO connection
 io.on("connection", (socket) => {
@@ -192,6 +207,7 @@ import subscriptionRouter from "./routes/subscription.routes.js";
 import contactRouter from "./routes/contactUs.routes.js";
 import invitationRoute from "./routes/invitation.routes.js";
 import notificationsRoute from "./routes/notification.routes.js";
+import dealHealthRouter from "./routes/dealHealth.routes.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -209,7 +225,8 @@ app.use("/api/v1/waitlist", waitlistRouter);
 app.use("/api/v1/billing", subscriptionRouter);
 app.use("/api/v1/contact", contactRouter);
 app.use("/api/v1/invite", invitationRoute);
-app.use("/api/v1/notifications", notificationsRoute)
+app.use("/api/v1/notifications", notificationsRoute);
+app.use("/api/v1/deal-health", dealHealthRouter);
 
 // ==========================================================
 // Error handling middleware (must be last)
