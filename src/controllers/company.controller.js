@@ -7,6 +7,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { Validator } from "../utils/validator.js";
 import { Lead } from "../models/lead.model.js";
 import FollowUp from "../models/followUp.model.js";
+import EmailService from "../services/email.service.js"
+import { OTP } from "../models/otp.model.js";
 // import {
 //   getAccessTokenCookieOptions,
 //   getRefreshTokenCookieOptions,
@@ -200,91 +202,205 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
 // ...existing code...
 
 const registerCompany = asyncHandler(async (req, res) => {
-  const { companyName, email, password, website, industry, contactPerson } =
-    req.body;
+  const { email, password, confirmPassword } = req.body;
+
 
   // Validate required fields using validator
   const validationRules = {
-    companyName: {
-      type: "required",
-      options: { minLength: 2, maxLength: 100 },
-    },
     email: { type: "email", required: true },
-    password: { type: "required", options: { minLength: 6, maxLength: 128 } },
+    password: { type: "required", options: { minLength: 8, maxLength: 128 } },
+    confirmPassword: { type: "required" },
   };
 
   Validator.validateFields(req.body, validationRules);
 
+  // Check if passwords match
+  if (password !== confirmPassword) {
+    throw new ApiError(400, "Passwords do not match");
+  }
+
   // Check if Company or email already exists
-  const existingCompany = await Company.findOne({
-    $or: [{ companyName }, { email }],
-  });
+  const existingCompany = await Company.findOne({ email });
 
   if (existingCompany) {
-    throw new ApiError(409, "Company with same name or email already exists");
-  }
-
-  // Handle logo upload if provided
-  let logo = null;
-  const logoLocalPath = req.file?.path;
-  if (logoLocalPath) {
-    logo = await uploadToOSS(logoLocalPath);
-  }
-
-  // Create company in DB
-  const company = await Company.create({
-    companyName,
-    email,
-    password,
-    website,
-    industry,
-    contactPerson,
-    logo: logo
-      ? {
-        url: logo.url,
-        public_id: logo.public_id,
-      }
-      : null,
-  });
-
-  // Get Company Data after Creating company and removed password and refreshToken in response
-  const createdCompany = await Company.findById(company._id).select(
-    "-password -refreshToken"
-  );
-
-  if (!createdCompany) {
     throw new ApiError(
-      500,
-      "Something went wrong while registering the company"
+      409,
+      "Email already registered. Please login or use a different email."
     );
   }
 
-  // Generate tokens for immediate login after registration
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-    company._id
+  // // Handle logo upload if provided
+  // let logo = null;
+  // const logoLocalPath = req.file?.path;
+  // if (logoLocalPath) {
+  //   logo = await uploadToOSS(logoLocalPath);
+  // }
+
+  // Create company in DB
+  const company = await Company.create({
+    email,
+    password,
+    provider: "local",
+    emailVerified: false,
+  });
+
+  if (!company) {
+    throw new ApiError(500, "Failed to create company account");
+  }
+
+  // Generate verification code
+  // const verificationCode = OTP.generateVerificationCode();
+  await company.save();
+
+  // generate random 6 digit code
+  const generateVerificationCode = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    return code;
+  }
+  
+  // save verification code in otp model
+  const newEmailOtp = await OTP.create({
+    email,
+    otp: generateVerificationCode,
+  });
+
+  await newEmailOtp.save();
+
+  // Send verification email
+  const emailService = new EmailService();
+  const emailResult = await emailService.sendVerificationCode(
+    email,
+    generateVerificationCode,
   );
 
+  if (!emailResult.success) {
+    console.warn("⚠️ Failed to send verification email, but account was created");
+  }
+
+  // Get Company Data after Creating company and removed password and refreshToken in response
+  // const createdCompany = await Company.findById(company._id).select(
+  //   "-password -refreshToken"
+  // );
+
   // New companies always need plan selection (they're on trial by default)
-  const needsPlanSelection = true;
+  // const needsPlanSelection = true;
 
   // Set cookies and return response
   return res
     .status(201)
-    // .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-    // .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
     .json(
       new ApiResponse(
         201,
         {
-          company: createdCompany,
-          accessToken,
-          refreshToken,
-          needsPlanSelection,
+          message: "Account created successfully. Please check your email for verification code."
         },
-        "Company Registered Successfully"
+        "Signup successful. Verification code sent to email."
       )
     );
 });
+
+// ==============================================================
+// Verify Email with Code
+// ==============================================================
+
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { verificationCode } = req.body;
+
+  // Validate required fields
+  if (!verificationCode) {
+    throw new ApiError(400, "Email and verification code are required");
+  }
+
+  // check if code exists
+  const findOtp = await OTP.findOne({ otp: verificationCode });
+  
+  // return error if code does not exists
+  if(!findOtp){
+    throw new ApiError(400, `${verificationCode} does not exists`);
+  }
+
+  if(findOtp.expiresIn > new Date()){
+    throw new ApiError(400, `${verificationCode} expired. please get new verification code`);
+  }
+
+
+  // Verify email after code verification
+  const existsCompany = await Company.findOne({ email: findOtp.email });
+  
+  // set email verified field to true after code verification
+  existsCompany?.emailVerified = true;
+
+  await existsCompany.save();
+
+  const verifiedCompany = await Company.findById(existsCompany._id).select(
+    "-password"
+  );
+
+    // Generate access and refresh token
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    existsCompany._id
+  );
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { company: verifiedCompany, accessToken, refreshToken },
+      "Email verified successfully. You can now login."
+    )
+  );
+});
+
+// ==============================================================
+// Resend Verification Code
+// ==============================================================
+
+const resendVerificationCode = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  // Validate email
+  if (!email) {
+    throw new ApiError(400, "Email is required");
+  }
+
+  Validator.validateEmail(email, "Email");
+
+  // Find company by email
+  const company = await Company.findOne({ email });
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  // Check if already verified
+  if (company.emailVerified) {
+    throw new ApiError(400, "Email is already verified");
+  }
+
+  // Generate new verification code
+  const verificationCode = company.generateVerificationCode();
+  await company.save();
+
+  // Send verification email
+  const emailService = new EmailService();
+  const emailResult = await emailService.sendVerificationCode(
+    email,
+    verificationCode,
+    company.companyName
+  );
+
+  if (!emailResult.success) {
+    throw new ApiError(500, "Failed to send verification email");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { email },
+      "Verification code resent to your email. Please check within 15 minutes."
+    )
+  );
+});
+
 
 const loginCompany = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -1002,5 +1118,6 @@ export {
   activateTeamMember,
   getJoinedCompany,
   changeCompanyName,
-  updateUserType
+  updateUserType,
+  verifyEmail
 };

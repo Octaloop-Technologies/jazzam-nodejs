@@ -176,6 +176,59 @@ class EmailService {
   }
 
   // ================================================
+  // Send email verification code
+  // ================================================
+
+  async sendVerificationCode(userEmail, verificationCode, userName = null) {
+    try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
+      if (!this.#isInitialized) {
+        console.warn(
+          "⚠️ Email service not initialized. Skipping verification email."
+        );
+        return {
+          success: false,
+          message: "Email service not available",
+          recipient: userEmail,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Validate input parameters
+      this.#validateEmailAddress(userEmail, "User email");
+
+      const mailOptions = {
+        from: process.env.EMAIL_COMPANY,
+        to: userEmail,
+        subject: "Email Verification - Jazzaam",
+        html: this.#generateEmailVerificationTemplate(userEmail, verificationCode),
+      };
+
+      const emailResult = await this.#sendEmail(mailOptions);
+
+      console.log(
+        `✅ Verification email sent successfully to ${userEmail}: ${emailResult.messageId}`
+      );
+      return {
+        success: true,
+        messageId: emailResult.messageId,
+        recipient: userEmail,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ Failed to send verification email:", error.message);
+      return {
+        success: false,
+        message: error.message,
+        recipient: userEmail,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
+  // ================================================
   // Send confirmation email to the user who joined waitlist
   // ================================================
 
@@ -319,8 +372,8 @@ class EmailService {
     }
   }
 
-  async sendInvitationEmail(name, email, link){
-        try {
+  async sendInvitationEmail(name, email, link) {
+    try {
       // Ensure email service is initialized
       await this.#initializeTransporter();
 
@@ -339,7 +392,7 @@ class EmailService {
       // Validate input parameters
       this.#validateEmailAddress(email);
 
-      const mailOptions = this.#buildInvitationEmailOptions(email,link, name);
+      const mailOptions = this.#buildInvitationEmailOptions(email, link, name);
       const emailResult = await this.#sendEmail(mailOptions);
 
       console.log(
@@ -503,8 +556,6 @@ class EmailService {
     };
   }
 
-
-
   // Build mail options for follow-up email
   #buildFollowUpMailOptions(companyName, email, subject, message) {
     const emailMessage =
@@ -541,7 +592,7 @@ class EmailService {
       priority: "normal",
     };
   }
-  
+
 
   // Build mail options for lead notification email
   #buildLeadNotificationMailOptions(lead, form, company) {
@@ -807,6 +858,47 @@ class EmailService {
       </html>
     `;
   }
+
+  // Generate verification email
+  #generateEmailVerificationTemplate(verificationCode, email){
+    return `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+              .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+              .content { padding: 30px; text-align: center; }
+              .code { font-size: 36px; font-weight: bold; color: #4CAF50; letter-spacing: 2px; margin: 20px 0; font-family: monospace; }
+              .footer { text-align: center; font-size: 12px; color: #999; margin-top: 30px; }
+              .note { background-color: #f0f0f0; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; text-align: left; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h2>Verify Your Email</h2>
+              </div>
+              <div class="content">
+                <p>Hello ${email},</p>
+                <p>Thank you for signing up! To complete your registration, please use the verification code below:</p>
+                <div class="code">${verificationCode}</div>
+                <p>This code will expire in 15 minutes.</p>
+                <div class="note">
+                  <strong>Never share this code with anyone.</strong> Jazzaam support will never ask for your verification code.
+                </div>
+                <p>If you didn't request this code, please ignore this email.</p>
+              </div>
+              <div class="footer">
+                <p>&copy; ${new Date().getFullYear()} Jazzaam. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `
+  }
+
 }
 
 // Create and export a singleton instance

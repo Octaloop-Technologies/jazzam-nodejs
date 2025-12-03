@@ -22,6 +22,7 @@ import {
   activateTeamMember,
   changeCompanyName,
   updateUserType,
+  verifyEmail,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -35,10 +36,13 @@ const router = Router();
 // ================================================
 
 // POST /api/v1/companies/auth/register
-router.route("/auth/register").post(upload.single("logo"), registerCompany);
+router.route("/auth/register").post(registerCompany);
 
 // POST /api/v1/companies/auth/login
 router.route("/auth/login").post(loginCompany);
+
+// POST /api/v1/companies/auth/verify-email
+router.route("/auth/verify-email").post(verifyEmail);
 
 // ================================================
 // OAuth routes (Google, Zoho)

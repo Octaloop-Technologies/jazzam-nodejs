@@ -228,6 +228,12 @@ const companySchema = new Schema(
       },
     },
 
+    // Company onboarding status
+    onboarding: {
+      type: Boolean,
+      default: false
+    },
+
     // Team management
     subscriptionSeats: {
       type: Number,
@@ -264,6 +270,10 @@ const companySchema = new Schema(
         },
       },
     ],
+    emailVerified: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,
