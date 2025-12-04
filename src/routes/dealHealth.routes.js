@@ -17,7 +17,7 @@ router.use(verifyJWT);
 
 // Get dashboard metrics for company
 // GET /api/v1/deal-health/dashboard
-router.get("/dashboard", getDashboardMetrics);
+// router.get("/dashboard", getDashboardMetrics);
 
 // Get deal health for a specific lead
 // GET /api/v1/deal-health/:leadId
