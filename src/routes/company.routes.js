@@ -22,6 +22,9 @@ import {
   activateTeamMember,
   changeCompanyName,
   updateUserType,
+  verifyEmail,
+  resendVerificationCode,
+  completeCompanyOnboarding,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -35,10 +38,16 @@ const router = Router();
 // ================================================
 
 // POST /api/v1/companies/auth/register
-router.route("/auth/register").post(upload.single("logo"), registerCompany);
+router.route("/auth/register").post(registerCompany);
 
 // POST /api/v1/companies/auth/login
 router.route("/auth/login").post(loginCompany);
+
+// POST /api/v1/companies/auth/verify-email
+router.route("/auth/verify-email").post(verifyEmail);
+
+// POST /api/v1/companies/auth/resend-verification-code
+router.route("/auth/resend-verification-code").post(resendVerificationCode);
 
 // ================================================
 // OAuth routes (Google, Zoho)
@@ -103,6 +112,10 @@ router.route("/auth/update-company").patch(updateCompanyDetails);
 
 // PATCH /api/v1/companies/auth/onboarding
 router.route("/auth/onboarding").patch(updateOnboardingStatus);
+
+// PATCH /api/v1/companies/auth/companyOnboarding
+router.route("/auth/company-onboarding").patch(completeCompanyOnboarding);
+
 
 // PATCH /api/v1/companies/auth/update-user-type
 router.route("/auth/update-user-type/:id").patch(updateUserType)
