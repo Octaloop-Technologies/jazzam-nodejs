@@ -179,7 +179,7 @@ class EmailService {
   // Send email verification code
   // ================================================
 
-  async sendVerificationCode(userEmail, verificationCode, userName = null) {
+  async sendVerificationCode(userEmail, verificationCode) {
     try {
       // Ensure email service is initialized
       await this.#initializeTransporter();
@@ -860,7 +860,7 @@ class EmailService {
   }
 
   // Generate verification email
-  #generateEmailVerificationTemplate(verificationCode, email){
+  #generateEmailVerificationTemplate(email,verificationCode){
     return `
         <!DOCTYPE html>
         <html>

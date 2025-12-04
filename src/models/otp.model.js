@@ -12,7 +12,7 @@ const OTPSchema = new Schema({
         unique: true
     },
     expiresIn: {
-        type: Number,
+        type: Date,
         required: true,
         default: new Date(Date.now() + 15 * 60 * 1000)
     }

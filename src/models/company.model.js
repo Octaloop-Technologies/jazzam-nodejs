@@ -24,6 +24,15 @@ const companySchema = new Schema(
       type: String,
       required: [true, "Password is required"],
     },
+    // companyDescription
+    description: {
+      type: String
+    },
+
+    // company skill type
+    companySkillType: {
+      type: String
+    },
 
     // user type
     userType: {
@@ -229,7 +238,7 @@ const companySchema = new Schema(
     },
 
     // Company onboarding status
-    onboarding: {
+    companyOnboarding: {
       type: Boolean,
       default: false
     },

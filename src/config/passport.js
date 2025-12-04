@@ -47,7 +47,7 @@ passport.use(
         }
 
         // Check if company exists with same email
-        company = await Company.findOne({ email: profile.emails[0].value });
+        company = await Company.findOne({ email: profile.emails[0].value, provider: "local" });
 
         if (company) {
           // Link Google account to existing company
