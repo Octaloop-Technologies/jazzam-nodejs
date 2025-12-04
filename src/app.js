@@ -208,6 +208,7 @@ import contactRouter from "./routes/contactUs.routes.js";
 import invitationRoute from "./routes/invitation.routes.js";
 import notificationsRoute from "./routes/notification.routes.js";
 import dealHealthRouter from "./routes/dealHealth.routes.js";
+import ServicesRouter from "./routes/services.routes.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -227,6 +228,7 @@ app.use("/api/v1/contact", contactRouter);
 app.use("/api/v1/invite", invitationRoute);
 app.use("/api/v1/notifications", notificationsRoute);
 app.use("/api/v1/deal-health", dealHealthRouter);
+app.use("/api/v1/services", ServicesRouter);
 
 // ==========================================================
 // Error handling middleware (must be last)
