@@ -77,20 +77,26 @@ cron.schedule("0 0 * * *", scheduledLeads, {
   timezone: "Asia/Riyadh"
 });
 
+// cron job for inbound email's
+cron.schedule("*/5 * * * *",  async () => {
+  console.log("checking for email replies.....");
+  await checkReplies();
+}) 
+
 // Daily health recalculation at 2 AM
-// cron.schedule("0 2 * * *", async () => {
-//   console.log("🕛 Running daily deal health recalculation:", new Date().toISOString());
-//   try {
-//     const companies = await Company.find();
-//     for (const company of companies) {
-//       await dealHealthService.batchCalculateHealth(company._id);
-//     }
-//   } catch (error) {
-//     console.error("❌ Health recalculation failed:", error);
-//   }
-// }, {
-//   timezone: "Asia/Riyadh"
-// });
+cron.schedule("0 2 * * *", async () => {
+  console.log("🕛 Running daily deal health recalculation:", new Date().toISOString());
+  try {
+    const companies = await Company.find();
+    for (const company of companies) {
+      await dealHealthService.batchCalculateHealth(company._id);
+    }
+  } catch (error) {
+    console.error("❌ Health recalculation failed:", error);
+  }
+}, {
+  timezone: "Asia/Riyadh"
+});
 
 // Socket.IO connection
 io.on("connection", (socket) => {
@@ -209,6 +215,9 @@ import invitationRoute from "./routes/invitation.routes.js";
 import notificationsRoute from "./routes/notification.routes.js";
 import dealHealthRouter from "./routes/dealHealth.routes.js";
 import ServicesRouter from "./routes/services.routes.js";
+import { EngagementHistory } from "./models/engagementHistory.model.js";
+import dealHealthService from "./services/dealHealth.service.js";
+import checkReplies from "./utils/check-inbound-replies.js";
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -229,6 +238,61 @@ app.use("/api/v1/invite", invitationRoute);
 app.use("/api/v1/notifications", notificationsRoute);
 app.use("/api/v1/deal-health", dealHealthRouter);
 app.use("/api/v1/services", ServicesRouter);
+app.get("/api/email/track/open/:token", async(req, res) => {
+  try {
+    const { token } = req.params;
+    
+    const leadId = token.split("-")[0];
+
+    // Update tracking in database
+    await EngagementHistory.findOneAndUpdate(
+      { 
+        leadId,
+        "emailMetrics.messageId": token,
+        engagementType: "email_sent"
+      },
+      {
+        $set: {
+          engagementType: "email_opened",
+          "emailMetrics.openedAt": new Date(),
+          engagementDate: new Date(),
+        },
+        $inc: {
+          "emailMetrics.openCount": 1
+        }
+      },
+      { new: true }
+    );
+    
+    console.log(`📬 Email opened with token: ${token}`);
+    console.log(`👤 User Agent: ${req.headers['user-agent']}`);
+    console.log(`🌐 IP: ${req.ip}`);
+    
+    // Return a 1x1 transparent GIF pixel
+    const pixel = Buffer.from(
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      'base64'
+    );
+    
+    res.writeHead(200, {
+      'Content-Type': 'image/gif',
+      'Content-Length': pixel.length,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
+    res.end(pixel);
+  } catch (error) {
+    console.error('Error tracking email open:', error);
+    // Still return a pixel even on error to avoid breaking email display
+    const pixel = Buffer.from(
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      'base64'
+    );
+    res.type('image/gif').send(pixel);
+  }
+})
 
 // ==========================================================
 // Error handling middleware (must be last)

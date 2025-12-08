@@ -11,6 +11,7 @@ import { syncLeadToCrm } from "../services/crm/sync.service.js";
 import FollowUp from "../models/followUp.model.js";
 import mongoose from "mongoose";
 import Notification from "../models/notifications.model.js";
+import dealHealthService from "../services/dealHealth.service.js";
 // import dealHealthService from "../services/dealHealth.service.js";
 
 // ==============================================================
@@ -447,24 +448,27 @@ const submitFormData = asyncHandler(async (req, res) => {
         status: "new",
       };
 
-      console.log("scrapped Data****************:", scrapedData);
-
       const lead = await Lead.create(leadData);
 
       // Send welcome email to lead if enabled and lead has email
       if (form.settings.autoResponse.enabled && lead.email) {
         try {
-          await emailService.sendWelcomeEmail(lead, form);
+          const welcomeEmail = await emailService.sendWelcomeEmail(lead, form);
           await lead.updateEmailStatus("welcome", true);
           console.log(`✅ Welcome email sent to lead: ${lead.email}`);
           // After lead creation and email sending:
-          // await dealHealthService.logEngagement(lead.companyId, lead._id, {
-          //   engagementType: "email_sent",
-          //   emailMetrics: {
-          //     subject: emailSubject,
-          //     sentAt: new Date()
-          //   }
-          // })
+          if(welcomeEmail.success === true){
+            await dealHealthService.logEngagement(lead.companyId, lead._id, {
+              engagementType: "email_sent",
+              emailMetrics: {
+                subject: "lead welcome email sent",
+                sentAt: new Date(),
+                messageId: welcomeEmail?.messageId
+              },
+              contactType: "email",
+              direction: "outbound"
+            })
+          }
         } catch (error) {
           console.error("Failed to send welcome email to lead:", error);
         }

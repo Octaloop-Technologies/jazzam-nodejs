@@ -67,8 +67,39 @@ const getLeads = asyncHandler(async (req, res) => {
       },
     },
     {
+      $lookup: {
+        from: "dealhealth",
+        let: { leadId: "$_id", companyId: "$companyId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$leadId", "$$leadId"] },
+                  { $eq: ["$companyId", "$$companyId"] }
+                ]
+              }
+            }
+          },
+          {
+            $project: {
+              healthScore: 1,
+              healthStatus: 1,
+              riskIndicators: 1,
+              aiAnalysis: 1,
+              engagementMetrics: 1,
+              velocityMetrics: 1,
+              lastAnalyzedAt: 1
+            }
+          }
+        ],
+        as: "dealHealth",
+      },
+    },
+    {
       $addFields: {
         form: { $arrayElemAt: ["$form", 0] },
+        dealHealth: { $arrayElemAt: ["$dealHealth", 0] },
         // For backward compatibility: use platformUrl if profileUrl doesn't exist
         profileUrl: {
           $ifNull: ["$profileUrl", "$platformUrl"],
@@ -93,6 +124,8 @@ const getLeads = asyncHandler(async (req, res) => {
     hasPrevPage: result.hasPrevPage,
     limit: result.limit,
   };
+
+  console.log("dealhealth response*******", response)
 
   return res
     .status(200)

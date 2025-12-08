@@ -35,19 +35,19 @@ const getLeadHealth = asyncHandler(async (req, res) => {
 });
 
 // Get dashboard metrics
-// const getDashboardMetrics = asyncHandler(async (req, res) => {
-//   const metrics = await dealHealthService.getDashboardMetrics(req.company._id);
+const getDashboardMetrics = asyncHandler(async (req, res) => {
+  const metrics = await dealHealthService.getDashboardMetrics(req.company._id);
 
-//   return res
-//     .status(200)
-//     .json(
-//       new ApiResponse(
-//         200,
-//         metrics,
-//         "Dashboard metrics retrieved successfully"
-//       )
-//     );
-// });
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        metrics,
+        "Dashboard metrics retrieved successfully"
+      )
+    );
+});
 
 // Get engagement history for a lead
 const getEngagementHistory = asyncHandler(async (req, res) => {
@@ -185,7 +185,7 @@ const getAtRiskLeads = asyncHandler(async (req, res) => {
 
 export {
   getLeadHealth,
-  // getDashboardMetrics,
+  getDashboardMetrics,
   getEngagementHistory,
   logEngagement,
   recalculateHealth,

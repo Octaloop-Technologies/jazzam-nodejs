@@ -9,6 +9,8 @@ import {
   sanitizeUserData,
   buildUserDataRows,
 } from "../templates/email/index.js";
+import crypto from "crypto";
+import { storeMessageIdMapping } from "../utils/check-inbound-replies.js";
 
 class EmailService {
   #transporter = null;
@@ -310,8 +312,8 @@ class EmailService {
       );
       return {
         success: true,
-        messageId: emailResult.messageId,
-        recipient: lead.email,
+        messageId: mailOptions.messageId,
+        recipient: "mudasirriaz1793@gmail.com",
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -544,6 +546,13 @@ class EmailService {
       form.settings?.autoResponse?.message ||
       "Thank you for reaching out. We'll get back to you soon!";
 
+    // Generate unique message ID in format: leadId-timestamp
+    const uniqueId = `${lead._id}-${Date.now()}`;
+    const messageId = `${uniqueId}@jazzam.ai`;
+
+    // Store messageId to companyId mapping for reply processing
+    storeMessageIdMapping(uniqueId, form.companyId?._id || form.companyId, lead._id);
+
     return {
       from: {
         name: companyName,
@@ -551,8 +560,16 @@ class EmailService {
       },
       to: lead.email,
       subject: subject,
-      html: this.#generateWelcomeEmailTemplate(lead, companyName, message),
+      html: this.#generateWelcomeEmailTemplate(lead, companyName, message, messageId),
+      messageId: messageId,
       priority: "normal",
+      headers: {
+        'X-Tracking-ID': uniqueId,
+        'X-Email-Type': 'welcome',
+        'X-Lead-ID': (lead._id || lead.id || 'unknown').toString(),
+        'X-Company-ID': (form.companyId?._id || form.companyId || 'unknown').toString(),
+        'X-Message-ID': uniqueId,
+      }
     };
   }
 
@@ -622,8 +639,24 @@ class EmailService {
   }
 
   // Generate welcome email template
-  #generateWelcomeEmailTemplate(lead, companyName, message) {
+  #generateWelcomeEmailTemplate(lead, companyName, message, trackingToken) {
     const leadName = lead.fullName || lead.firstName || "there";
+
+    // Create tracking pixel url with the same token
+    const trackingPixelUrl = `${process.env.SERVER_URL}/api/email/track/open/${trackingToken}`;
+
+    console.log("trackingPixelUrl:", trackingPixelUrl);
+
+    // Add tracking pixel to HTML
+    const trackingPixel = `
+    <img 
+      src="${trackingPixelUrl}?rand=${Math.random()}"
+      width=1
+      height=1
+      style="display:none;width=1px;height:1px;opacity:0;"
+      alt=""
+    />
+    `;
 
     return `
       <!DOCTYPE html>
@@ -649,12 +682,13 @@ class EmailService {
           <p>We're excited to connect with you and will be in touch soon.</p>
           <p>Best regards,<br>The ${companyName} Team</p>
         </div>
-        <div class="footer">
-          <p>This email was sent to ${lead.email}</p>
-        </div>
+        ${trackingPixel}
       </body>
       </html>
     `;
+    //     <div class="footer">
+    //   <p>This email was sent to ${lead.email}</p>
+    // </div>
   }
 
   #generateInvitationLinkTemplate(link, companyName, message, name) {

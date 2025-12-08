@@ -2,7 +2,7 @@ import mongoose, { Schema } from 'mongoose';
 
 const engagementHistorySchema = new Schema({
     // References
-    compnayId: {
+    companyId: {
         type: Schema.Types.ObjectId,
         ref: "Company",
         required: true,
@@ -17,7 +17,7 @@ const engagementHistorySchema = new Schema({
     // Engagement type
     engagementType: {
         type: String,
-        enum: ["email_sent", "email_opened", "email_clicked", "response", "contact", "meeting"],
+        enum: ["email_sent", "email_opened", "response", "contact", "meeting"],
         required: true,
         index: true
     },
@@ -26,7 +26,7 @@ const engagementHistorySchema = new Schema({
         subject: String,
         sentAt: Date,
         openedAt: Date,
-        clickedAt: Date,
+        respondedAt: Date,
         linkClicked: String,
         openCount: { type: Number, default: 0 },
         clickCount: { type: Number, default: 0 },
@@ -57,8 +57,7 @@ const engagementHistorySchema = new Schema({
         type: Date,
         default: Date.now,
         index: true
-    }
-
+    },
 }, { timestamps: true });
 
 // Indexes for better query performance
