@@ -8,6 +8,7 @@ import FollowUp from "../models/followUp.model.js";
 import emailService from "../services/email.service.js";
 import Notification from "../models/notifications.model.js";
 import ExcelJs from "exceljs";
+import { DealHealth } from "../models/dealHealth.model.js";
 
 // ==============================================================
 // Lead Controller Functions
@@ -144,9 +145,13 @@ const getLeadById = asyncHandler(async (req, res) => {
       leadData.profileUrl = leadData.platformUrl;
     }
 
+    // Lead deal health and score
+    const dealHealth = await DealHealth.findOne({ leadId: id }, { engagementMetrics: 1, velocityMetrics: 1, leadId: 1, 
+    companyId: 1,healthScore: 1, healthStatus: 1, aiAnalysis: 1  });
+
     return res
       .status(200)
-      .json(new ApiResponse(200, leadData, "Lead fetched successfully"));
+      .json(new ApiResponse(200, { leadData, dealHealth }, "Lead fetched successfully"));
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(500, error.message || "Failed to fetch lead");
