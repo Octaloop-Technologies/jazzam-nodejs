@@ -499,7 +499,7 @@ const loginCompany = asyncHandler(async (req, res) => {
 // ==============================================================
 
 const completeCompanyOnboarding = asyncHandler(async (req, res) => {
-  const { companyName, description, skillType } = req.body;
+  const { companyName, description, service, subServices } = req.body;
 
   // Validate that all required fields are provided and not empty
   if (!companyName || companyName.trim() === "") {
@@ -510,8 +510,12 @@ const completeCompanyOnboarding = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Description is required and cannot be empty");
   }
 
-  if (!skillType || skillType.trim() === "") {
-    throw new ApiError(400, "Skill type is required and cannot be empty");
+  if (!service || service.trim() === "") {
+    throw new ApiError(400, "Service type is required and cannot be empty");
+  }
+
+  if(!subServices || subServices.length === 0){
+    throw new ApiError(400, "Sub Service type is required and cannot be empty");
   }
 
   // Get company from request (from verifyJWT middleware)
@@ -528,7 +532,8 @@ const completeCompanyOnboarding = asyncHandler(async (req, res) => {
       $set: {
         companyName: companyName.trim(),
         description: description.trim(),
-        skillType: skillType.trim(),
+        companyServiceType: service.trim(),
+        companySubServices: subServices,
         companyOnboarding: true, 
       },
     },
