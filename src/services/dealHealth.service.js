@@ -9,7 +9,7 @@ class DealHealthService {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
-    this.model = process.env.OPENAI_MODEL;
+    this.model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   }
 
   /**

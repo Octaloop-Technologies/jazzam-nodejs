@@ -49,7 +49,7 @@ const dealHealthSchema = new Schema(
             contactFrequencyTrend: { type: String, enum: ["increasing", "decreasing", "stable"], default: "stable" },
             engagementDecayDays: { type: Number, default: 0 },
             daysInCurrentStage: { type: Number, default: 0 },
-            stageProgressSpeed: { type: Number, enum: ["fast", "normal", "slow"], default: "normal" }
+            stageProgressSpeed: { type: String, enum: ["fast", "normal", "slow"], default: "normal" }
         },
 
         // Cadence Compliance
