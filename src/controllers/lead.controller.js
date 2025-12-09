@@ -68,32 +68,20 @@ const getLeads = asyncHandler(async (req, res) => {
     },
     {
       $lookup: {
-        from: "dealhealth",
-        let: { leadId: "$_id", companyId: "$companyId" },
+        from: "dealhealths",
+        localField: "_id",
+        foreignField: "leadId",
+        as: "dealHealth",
         pipeline: [
-          {
-            $match: {
-              $expr: {
-                $and: [
-                  { $eq: ["$leadId", "$$leadId"] },
-                  { $eq: ["$companyId", "$$companyId"] }
-                ]
-              }
-            }
-          },
           {
             $project: {
               healthScore: 1,
               healthStatus: 1,
-              riskIndicators: 1,
-              aiAnalysis: 1,
-              engagementMetrics: 1,
               velocityMetrics: 1,
-              lastAnalyzedAt: 1
+              analysisCount: 1
             }
           }
-        ],
-        as: "dealHealth",
+        ]
       },
     },
     {
@@ -125,7 +113,7 @@ const getLeads = asyncHandler(async (req, res) => {
     limit: result.limit,
   };
 
-  console.log("dealhealth response*******", response)
+  console.log("dealhealth response*******", response.leads[0].dealHealth)
 
   return res
     .status(200)

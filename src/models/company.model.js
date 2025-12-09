@@ -30,8 +30,12 @@ const companySchema = new Schema(
     },
 
     // company skill type
-    companySkillType: {
+    companyServiceType: {
       type: String
+    },
+
+    companySubServices: {
+      type: [String],
     },
 
     // user type
