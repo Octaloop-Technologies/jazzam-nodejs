@@ -5,31 +5,28 @@ on:
     branches:
       - main
 
-
 jobs:
   build:
     runs-on: self-hosted
 
     steps:
-      
-      # 2. Set proper permissions for runner
-      - name: Set proper permissions for runner
-        run: sudo chown -R $USER:$USER /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs
-
-      # 3. Checkout latest code
+      # 1. Checkout latest code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 4. Clear npm cache (on runner, not inside container)
+      # 2. Ensure project folder exists and set proper permissions
+      - name: Set proper permissions for runner
+        run: |
+          mkdir -p /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs
+          sudo chown -R $USER:$USER /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs
+
+      # 3. Clear npm cache (on runner, not inside container)
       - name: Clear npm cache
         run: |
           echo "Clearing npm cache..."
           npm cache clean --force
 
-      # 5. Create .env file dynamically from GitHub Secrets
-    
-
-      # 6. Stop & Remove Existing Container (if running)
+      # 4. Stop & Remove Existing Container (if running)
       - name: Stop & Remove Existing Container
         run: |
           CONTAINER_ID=$(sudo -u jazzam docker ps -aq --filter "name=jazzam-backend-container")
@@ -39,19 +36,18 @@ jobs:
             sudo -u jazzam docker rm jazzam-backend-container
           fi
 
-      # 7. Build Docker Image without using cache
+      # 5. Build Docker Image without using cache
       - name: Build Docker Image (no cache)
         run: |
           sudo -u jazzam docker build --no-cache -t jazzam-nodejs-image:latest .
 
-      # 8. Run New Container
+      # 6. Run New Container
       - name: Run New Container
         run: |
           echo "Running new container..."
           sudo -u jazzam docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
 
-
-      # 9. Prune Unused Docker Resources
+      # 7. Prune Unused Docker Resources
       - name: Prune Unused Docker Resources
         run: |
           echo "Cleaning up unused Docker resources..."
