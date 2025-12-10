@@ -4,8 +4,10 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Use npm mirror to bypass 502 errors
-RUN npm config set registry https://registry.npmmirror.com \
+# Clear any inherited npm proxy / registry
+RUN npm config delete proxy \
+    && npm config delete https-proxy \
+    && npm config set registry https://registry.npmjs.org/ \
     && npm install
 
 COPY . .
