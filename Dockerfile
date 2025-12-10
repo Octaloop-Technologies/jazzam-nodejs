@@ -1,20 +1,16 @@
 FROM node:20
 WORKDIR /app
 
-# Copy package.json files
 COPY package*.json ./
 
-# Configure npm for network issues
-RUN npm config set strict-ssl false
-RUN npm config set registry http://registry.npmjs.org/
+# Use HTTPS registry for stability
+RUN npm config set registry https://registry.npmjs.org/
+RUN npm config set strict-ssl true
 
-# Install dependencies with retry
-RUN npm install 
+# Install dependencies with retry and ignore peer conflicts
+RUN npm install --legacy-peer-deps --retry 5
 
-# Copy the rest of the application
 COPY . .
 
-# Expose port
 EXPOSE 4000
-
 CMD ["npm", "start"]
