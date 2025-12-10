@@ -340,7 +340,7 @@ const verifyEmail = asyncHandler(async (req, res) => {
   await existsCompany.save();
 
   // delete otp after verification is completed
-  // await OTP.deleteOne({ _id: findOtp._id });
+  await OTP.deleteOne({ _id: findOtp._id });
 
   // Generate access and refresh token
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
