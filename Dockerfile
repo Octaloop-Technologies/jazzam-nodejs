@@ -2,14 +2,16 @@ FROM node:latest
 
 WORKDIR /app
 
-# Copy package.json
+# Copy package.json files
 COPY package*.json ./
 
-# Disable strict SSL temporarily to fix ERR_TLS_CERT_ALTNAME_INVALID
+# Configure npm for network issues
 RUN npm config set strict-ssl false
+RUN npm config set registry http://registry.npmjs.org/
 
-# Install dependencies
-RUN npm install
+# Install dependencies with retry
+RUN npm install --retry=5
+
 # Copy the rest of the application
 COPY . .
 
@@ -17,4 +19,3 @@ COPY . .
 EXPOSE 4000
 
 CMD ["npm", "start"]
-
