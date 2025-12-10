@@ -4,14 +4,12 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Fix npm SSL and registry issues
-RUN npm config set registry https://registry.npmjs.org/
+# Use HTTP registry to bypass SSL/proxy issues
+RUN npm config set registry http://registry.npmjs.org/
 RUN npm config set strict-ssl false
-RUN npm config delete proxy
-RUN npm config delete https-proxy
 
-# Install dependencies with retry and ignore peer conflicts
-RUN npm install --legacy-peer-deps --retry 5
+# Install with fallback options
+RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps --registry=http://registry.npmjs.org/
 
 COPY . .
 
