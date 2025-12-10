@@ -25,4 +25,4 @@ OTPSchema.methods.verifyCode = function (code) {
     return false;
 }
 
-export const OTP = mongoose.model("opt", OTPSchema)
+export const OTP = mongoose.model("otp", OTPSchema)
