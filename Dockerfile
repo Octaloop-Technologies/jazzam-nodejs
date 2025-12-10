@@ -9,8 +9,7 @@ COPY package*.json ./
 RUN npm config set strict-ssl false
 
 # Install dependencies
-RUN npm install --no-cache
-
+RUN npm install
 # Copy the rest of the application
 COPY . .
 
