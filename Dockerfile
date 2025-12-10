@@ -1,5 +1,4 @@
-FROM node:latest
-
+FROM node:20
 WORKDIR /app
 
 # Copy package.json files
@@ -10,7 +9,7 @@ RUN npm config set strict-ssl false
 RUN npm config set registry http://registry.npmjs.org/
 
 # Install dependencies with retry
-RUN npm install --retry=5
+RUN npm install 
 
 # Copy the rest of the application
 COPY . .
