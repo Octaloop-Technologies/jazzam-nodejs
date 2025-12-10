@@ -17,8 +17,8 @@ jobs:
       # 2. Ensure project folder exists and set proper permissions
       - name: Set proper permissions for runner
         run: |
-          mkdir -p /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs
-          sudo chown -R $USER:$USER /home/jazzam/actions-runner/jazzaam-nodejs-folder/jazzam-nodejs
+          mkdir -p $HOME/jazzam-nodejs-folder/jazzam-nodejs
+          sudo chown -R $USER:$USER $HOME/jazzam-nodejs-folder/jazzam-nodejs
 
       # 3. Clear npm cache (on runner, not inside container)
       - name: Clear npm cache
@@ -29,29 +29,29 @@ jobs:
       # 4. Stop & Remove Existing Container (if running)
       - name: Stop & Remove Existing Container
         run: |
-          CONTAINER_ID=$(sudo -u jazzam docker ps -aq --filter "name=jazzam-backend-container")
+          CONTAINER_ID=$(sudo docker ps -aq --filter "name=jazzam-backend-container")
           if [ ! -z "$CONTAINER_ID" ]; then
             echo "Stopping existing container..."
-            sudo -u jazzam docker stop jazzam-backend-container
-            sudo -u jazzam docker rm jazzam-backend-container
+            sudo docker stop jazzam-backend-container
+            sudo docker rm jazzam-backend-container
           fi
 
       # 5. Build Docker Image without using cache
       - name: Build Docker Image (no cache)
         run: |
-          sudo -u jazzam docker build --no-cache -t jazzam-nodejs-image:latest .
+          sudo docker build --no-cache -t jazzam-nodejs-image:latest .
 
       # 6. Run New Container
       - name: Run New Container
         run: |
           echo "Running new container..."
-          sudo -u jazzam docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
+          sudo docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
 
       # 7. Prune Unused Docker Resources
       - name: Prune Unused Docker Resources
         run: |
           echo "Cleaning up unused Docker resources..."
-          sudo -u jazzam docker system prune -af --volumes
+          sudo docker system prune -af --volumes
 
   nginx:
     runs-on: self-hosted
