@@ -4,10 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm config set proxy http://1v1-backend.octalooptechnologies.com:5000 \
-    && npm config set https-proxy http://1v1-backend.octalooptechnologies.com:5000 \
-    && npm config set strict-ssl false \
-    && npm install
+RUN npm install
 
 COPY . .
 
