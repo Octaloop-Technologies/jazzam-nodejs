@@ -4,14 +4,14 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Simple network and SSL fix
-RUN npm config set registry http://registry.npmjs.org/
-RUN npm config set strict-ssl false
-RUN npm config set fetch-timeout 300000
+# Use yarn instead of npm to bypass network issues
+RUN npm install -g yarn
+RUN yarn config set registry http://registry.npmjs.org/
+RUN yarn config set strict-ssl false
 
-# Install with fallback
-RUN npm install --legacy-peer-deps || \
-    npm install --legacy-peer-deps --registry=http://registry.npmjs.org/
+# Install with yarn (more reliable in corporate networks)
+RUN yarn install --legacy-peer-deps --network-timeout 300000 || \
+    yarn install --ignore-engines --network-timeout 300000
 
 COPY . .
 
