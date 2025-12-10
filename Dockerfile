@@ -1,31 +1,21 @@
-# Use an official Node.js base image
-FROM node:20
+FROM node:latest
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy package.json
 COPY package*.json ./
 
-# **Step 1: Remove any proxy config**
-RUN npm config delete proxy \
-    && npm config delete https-proxy
-
-# **Step 2: Ensure npm uses the official registry**
-RUN npm config set registry https://registry.npmjs.org/
-
-# **Step 3: Optional: ignore strict SSL (only if corporate proxy intercepts HTTPS)**
-# RUN npm config set strict-ssl false
+# Disable strict SSL temporarily to fix ERR_TLS_CERT_ALTNAME_INVALID
+RUN npm config set strict-ssl false
 
 # Install dependencies
-RUN npm install
+RUN npm install --no-cache
 
-# Copy the rest of the app
+# Copy the rest of the application
 COPY . .
 
-# Expose port (example)
-EXPOSE 5000
+# Expose port
+EXPOSE 4000
 
-# Start app
-CMD ["node", "index.js"]
+CMD ["npm", "start"]
 
