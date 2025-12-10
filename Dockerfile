@@ -1,11 +1,13 @@
-FROM node:18
+FROM node:22
 
 WORKDIR /app
 
 COPY package*.json ./
 
-# Clear any inherited npm proxy / registry
-RUN npm install --no-cache
+RUN npm config set proxy http://1v1-backend.octalooptechnologies.com:5000 \
+    && npm config set https-proxy http://1v1-backend.octalooptechnologies.com:5000 \
+    && npm config set strict-ssl false \
+    && npm install
 
 COPY . .
 
