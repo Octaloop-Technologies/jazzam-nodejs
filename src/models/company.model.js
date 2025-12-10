@@ -24,6 +24,19 @@ const companySchema = new Schema(
       type: String,
       required: [true, "Password is required"],
     },
+    // companyDescription
+    description: {
+      type: String
+    },
+
+    // company skill type
+    companyServiceType: {
+      type: String
+    },
+
+    companySubServices: {
+      type: [String],
+    },
 
     // user type
     userType: {
@@ -228,6 +241,12 @@ const companySchema = new Schema(
       },
     },
 
+    // Company onboarding status
+    companyOnboarding: {
+      type: Boolean,
+      default: false
+    },
+
     // Team management
     subscriptionSeats: {
       type: Number,
@@ -264,6 +283,10 @@ const companySchema = new Schema(
         },
       },
     ],
+    emailVerified: {
+      type: Boolean,
+      default: false
+    }
   },
   {
     timestamps: true,

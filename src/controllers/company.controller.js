@@ -7,6 +7,11 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { Validator } from "../utils/validator.js";
 import { Lead } from "../models/lead.model.js";
 import FollowUp from "../models/followUp.model.js";
+import emailService from "../services/email.service.js";
+import { OTP } from "../models/otp.model.js";
+import { generateOtp } from "../utils/generateOtp.js";
+import bcrypt from "bcrypt";
+
 // import {
 //   getAccessTokenCookieOptions,
 //   getRefreshTokenCookieOptions,
@@ -200,91 +205,221 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
 // ...existing code...
 
 const registerCompany = asyncHandler(async (req, res) => {
-  const { companyName, email, password, website, industry, contactPerson } =
-    req.body;
+  const { email, password, confirmPassword, userType } = req.body;
+
 
   // Validate required fields using validator
   const validationRules = {
-    companyName: {
-      type: "required",
-      options: { minLength: 2, maxLength: 100 },
-    },
     email: { type: "email", required: true },
-    password: { type: "required", options: { minLength: 6, maxLength: 128 } },
+    password: { type: "required", options: { minLength: 8, maxLength: 128 } },
+    confirmPassword: { type: "required" },
   };
 
   Validator.validateFields(req.body, validationRules);
 
+  // Check if passwords match
+  if (password !== confirmPassword) {
+    throw new ApiError(400, "Passwords do not match");
+  }
+
   // Check if Company or email already exists
-  const existingCompany = await Company.findOne({
-    $or: [{ companyName }, { email }],
-  });
+  const existingCompany = await Company.findOne({ email });
 
   if (existingCompany) {
-    throw new ApiError(409, "Company with same name or email already exists");
-  }
-
-  // Handle logo upload if provided
-  let logo = null;
-  const logoLocalPath = req.file?.path;
-  if (logoLocalPath) {
-    logo = await uploadToOSS(logoLocalPath);
-  }
-
-  // Create company in DB
-  const company = await Company.create({
-    companyName,
-    email,
-    password,
-    website,
-    industry,
-    contactPerson,
-    logo: logo
-      ? {
-        url: logo.url,
-        public_id: logo.public_id,
-      }
-      : null,
-  });
-
-  // Get Company Data after Creating company and removed password and refreshToken in response
-  const createdCompany = await Company.findById(company._id).select(
-    "-password -refreshToken"
-  );
-
-  if (!createdCompany) {
     throw new ApiError(
-      500,
-      "Something went wrong while registering the company"
+      409,
+      "Email already registered. Please login or use a different email."
     );
   }
 
-  // Generate tokens for immediate login after registration
-  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-    company._id
+  // // Handle logo upload if provided
+  // let logo = null;
+  // const logoLocalPath = req.file?.path;
+  // if (logoLocalPath) {
+  //   logo = await uploadToOSS(logoLocalPath);
+  // }
+
+  // Create company in DB
+  const company = await Company.create({
+    email,
+    companyName: email,
+    password,
+    provider: "local",
+    emailVerified: false,
+    userType
+  });
+
+  if (!company) {
+    throw new ApiError(500, "Failed to create company account");
+  }
+
+  // Generate verification code
+  await company.save();
+
+  // generate random 6 digit code
+  const verificationCode = generateOtp()
+
+  // save verification code in otp model
+  const newEmailOtp = await OTP.create({
+    email,
+    otp: verificationCode,
+  });
+
+  await newEmailOtp.save();
+
+  // Send verification email
+  const emailResult = await emailService.sendVerificationCode(
+    email,
+    verificationCode,
   );
 
+  if (!emailResult.success) {
+    console.warn("⚠️ Failed to send verification email, but account was created");
+  }
+
+  // Get Company Data after Creating company and removed password and refreshToken in response
+  // const createdCompany = await Company.findById(company._id).select(
+  //   "-password -refreshToken"
+  // );
+
   // New companies always need plan selection (they're on trial by default)
-  const needsPlanSelection = true;
+  // const needsPlanSelection = true;
 
   // Set cookies and return response
   return res
     .status(201)
-    // .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-    // .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
     .json(
       new ApiResponse(
         201,
         {
-          company: createdCompany,
-          accessToken,
-          refreshToken,
-          needsPlanSelection,
+          message: "Account created successfully. Please check your email for verification code."
         },
-        "Company Registered Successfully"
+        "Signup successful. Verification code sent to email."
       )
     );
 });
+
+// ==============================================================
+// Verify Email with Code
+// ==============================================================
+
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { email, verificationCode } = req.body;
+
+  // Validate required fields
+  if (!verificationCode) {
+    throw new ApiError(400, "Email and verification code are required");
+  }
+
+  // check if code exists
+  const findOtp = await OTP.findOne({ otp: verificationCode });
+
+  // return error if code does not exists
+  if (!findOtp) {
+    throw new ApiError(400, `${verificationCode} does not exists`);
+  }
+
+  // if (findOtp.expiresIn < new Date()) {
+  //   throw new ApiError(400, `${verificationCode} expired. please get new verification code`);
+  // }
+
+
+  // Verify email after code verification
+  const existsCompany = await Company.findOne({ email });
+  if (!existsCompany) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  if (existsCompany.emailVerified) {
+    throw new ApiError(400, "Email is already verified");
+  }
+
+  // set email verified field to true after code verification
+  existsCompany.emailVerified = true;
+
+  await existsCompany.save();
+
+  // delete otp after verification is completed
+  await OTP.deleteOne({ _id: findOtp._id });
+
+  // Generate access and refresh token
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    existsCompany._id
+  );
+
+  const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+
+  console.log("🔍Redirect URL******:", redirectUrl);
+
+  return res.status(200).json({
+    redirect: redirectUrl
+  });
+
+  // return res.status(200).json(
+  //   new ApiResponse(
+  //     200,
+  //     { company: verifiedCompany, accessToken, refreshToken },
+  //     "Email verified successfully. You can now login."
+  //   )
+  // );
+});
+
+// ==============================================================
+// Resend Verification Code
+// ==============================================================
+
+const resendVerificationCode = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  // Validate email
+  if (!email) {
+    throw new ApiError(400, "Email is required");
+  }
+
+  Validator.validateEmail(email, "Email");
+
+  // Find company by email
+  const company = await Company.findOne({ email });
+
+  if (!company) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  // Check if already verified
+  if (company.emailVerified) {
+    throw new ApiError(400, "Email is already verified");
+  }
+
+  // Generate new verification code
+  const verificationCode = generateOtp();
+
+  // save verification code in otp model
+  const newEmailOtp = await OTP.create({
+    email,
+    otp: verificationCode,
+  });
+
+  await newEmailOtp.save();
+
+  // Send verification email
+  const emailResult = await emailService.sendVerificationCode(
+    email,
+    verificationCode,
+  );
+
+  if (!emailResult.success) {
+    throw new ApiError(500, "Failed to send verification email");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { email },
+      "Verification code resent to your email. Please check within 15 minutes."
+    )
+  );
+});
+
 
 const loginCompany = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -313,48 +448,109 @@ const loginCompany = asyncHandler(async (req, res) => {
   }
 
   // Check if password is correct
-  const isPasswordValid = await company.isPasswordCorrect(password);
+  const isPasswordValid = await bcrypt.compare(password, company.password);
+
+  console.log("isPasswordValid*******", isPasswordValid)
 
   if (!isPasswordValid) {
-    throw new ApiError(401, "Password is incorrect");
+    throw new ApiError(401, "Password is incorrect. Please! enter valid password");
   }
-
-  // Update last login
-  company.lastLoginAt = new Date();
-  await company.save();
 
   // Generate access and refresh token
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
     company._id
   );
 
-  const loggedInCompany = await Company.findById(company._id).select(
-    "-password -refreshToken"
-  );
+  const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+
+  console.log("🔍Redirect URL******:", redirectUrl);
+
+  return res.status(200).json({
+    redirect: redirectUrl
+  });
+
+
 
   // Check if needs plan selection
   // User has selected a plan if subscriptionStartDate is set
-  const hasSelectedPlan = !!company.subscriptionStartDate;
+  // const hasSelectedPlan = !!company.subscriptionStartDate;
 
-  const needsPlanSelection = !hasSelectedPlan;
+  // const needsPlanSelection = !hasSelectedPlan;
 
   // Set access and refresh token in cookie
-  return res
-    .status(200)
-    // .cookie("accessToken", accessToken, getAccessTokenCookieOptions())
-    // .cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions())
-    .json(
-      new ApiResponse(
-        200,
-        {
-          company: loggedInCompany,
-          accessToken,
-          refreshToken,
-          needsPlanSelection,
-        },
-        "Company Logged In Successfully"
-      )
-    );
+  // return res
+  //   .status(200)
+  //   .json(
+  //     new ApiResponse(
+  //       200,
+  //       {
+  //         company: loggedInCompany,
+  //         accessToken,
+  //         refreshToken,
+  //         needsPlanSelection,
+  //       },
+  //       "Company Logged In Successfully"
+  //     )
+  //   );
+});
+
+// ==============================================================
+// Complete Company Onboarding
+// ==============================================================
+
+const completeCompanyOnboarding = asyncHandler(async (req, res) => {
+  const { companyName, description, service, subServices } = req.body;
+
+  // Validate that all required fields are provided and not empty
+  if (!companyName || companyName.trim() === "") {
+    throw new ApiError(400, "Company name is required and cannot be empty");
+  }
+
+  if (!description || description.trim() === "") {
+    throw new ApiError(400, "Description is required and cannot be empty");
+  }
+
+  if (!service || service.trim() === "") {
+    throw new ApiError(400, "Service type is required and cannot be empty");
+  }
+
+  if(!subServices || subServices.length === 0){
+    throw new ApiError(400, "Sub Service type is required and cannot be empty");
+  }
+
+  // Get company from request (from verifyJWT middleware)
+  const companyId = req.company._id;
+
+  if (!companyId) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
+  // Update company with onboarding data
+  const updatedCompany = await Company.findByIdAndUpdate(
+    companyId,
+    {
+      $set: {
+        companyName: companyName.trim(),
+        description: description.trim(),
+        companyServiceType: service.trim(),
+        companySubServices: subServices,
+        companyOnboarding: true, 
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  if (!updatedCompany) {
+    throw new ApiError(404, "Company not found");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      updatedCompany,
+      "Company onboarding completed successfully"
+    )
+  );
 });
 
 const logoutCompany = asyncHandler(async (req, res) => {
@@ -1002,5 +1198,8 @@ export {
   activateTeamMember,
   getJoinedCompany,
   changeCompanyName,
-  updateUserType
+  updateUserType,
+  verifyEmail,
+  resendVerificationCode,
+  completeCompanyOnboarding
 };
