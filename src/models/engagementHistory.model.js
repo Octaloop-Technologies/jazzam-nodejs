@@ -35,7 +35,7 @@ const engagementHistorySchema = new Schema({
     // contact data
     contactType: {
         type: String,
-        enum: ["email", "phone", "linkedin", "meeting", "note"]
+        enum: ["email", "phone", "linkedin", "meeting", "note", "form_submission"]
     },
 
     direction: {
