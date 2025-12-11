@@ -3,6 +3,7 @@ import { DealHealth } from "../models/dealHealth.model.js";
 import { Lead } from "../models/lead.model.js";
 import FollowUp from "../models/followUp.model.js";
 import OpenAI from "openai";
+import nextBestActionService from "./nextBestAction.service.js";
 
 class DealHealthService {
   constructor() {
@@ -46,10 +47,10 @@ class DealHealthService {
       if (!lead) throw new Error("Lead not found");
 
       // Get engagement history
-      const engagements = await this.getEngagementHistory(leadId);
+      const engagements = await this.getEngagementHistory(companyId, leadId);
       const metrics = await this.calculateEngagementMetrics(engagements, lead);
       const velocityMetrics = await this.calculateVelocityMetrics(engagements, lead);
-      const cadenceCompliance = await this.calculateCadenceCompliance(leadId);
+      const cadenceCompliance = await this.calculateCadenceCompliance(companyId, leadId);
       const riskIndicators = this.calculateRiskIndicators(metrics, velocityMetrics, cadenceCompliance);
 
       // Calculate health score
@@ -107,6 +108,17 @@ class DealHealthService {
 
       await dealHealth.save();
 
+      // Generate or refresh Next Best Action for this lead (non-blocking)
+      try {
+        nextBestActionService
+          .generateNextBestAction(companyId, leadId)
+          .catch((err) =>
+            console.error("[HEALTH] NextBestAction generation failed:", err.message)
+          );
+      } catch (err) {
+        console.error("[HEALTH] NextBestAction generation error:", err?.message || err);
+      }
+
       console.log(`[HEALTH] Health score calculated: ${healthScore} (${healthStatus})`);
 
       return dealHealth;
@@ -117,13 +129,14 @@ class DealHealthService {
   }
 
   /**
-   * Get engagement history for a lead
+   * Get engagement history for a lead (scoped by company)
    */
-  async getEngagementHistory(leadId, days = 90) {
+  async getEngagementHistory(companyId, leadId, days = 90) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
     return await EngagementHistory.find({
+      companyId,
       leadId,
       engagementDate: { $gte: startDate },
     }).sort({ engagementDate: -1 });
@@ -231,10 +244,10 @@ class DealHealthService {
   }
 
   /**
-   * Calculate cadence compliance
+   * Calculate cadence compliance (scoped by company)
    */
-  async calculateCadenceCompliance(leadId) {
-    const followUps = await FollowUp.find({ leadId })
+  async calculateCadenceCompliance(companyId, leadId) {
+    const followUps = await FollowUp.find({ companyId, leadId })
       .sort({ dateOfSubmission: -1 })
       .limit(10);
 

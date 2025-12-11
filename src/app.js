@@ -130,7 +130,7 @@ app.use(express.static("public"));
 // app.use(cookieParser());
 // app.use(sanitizeInput); // Input sanitization
 
-app.use(passport.initialize()); 
+app.use(passport.initialize());
 
 // ==========================================================
 // Session configuration for passport
@@ -176,6 +176,14 @@ app.use(
 
 // Serve Swagger JSON
 app.get("/api-docs.json", (req, res) => {
+  try {
+    // After recalculating health, batch-generate Next Best Actions for the company (non-blocking)
+    nextBestActionService
+      .batchGenerateActions(company._id)
+      .catch((err) => console.error("[NBA] Batch generation failed:", err.message));
+  } catch (err) {
+    console.error("[NBA] Batch generation error:", err?.message || err);
+  }
   res.setHeader("Content-Type", "application/json");
   res.send(swaggerDefinition);
 });
@@ -218,6 +226,10 @@ import ServicesRouter from "./routes/services.routes.js";
 import { EngagementHistory } from "./models/engagementHistory.model.js";
 import dealHealthService from "./services/dealHealth.service.js";
 import checkReplies from "./utils/check-inbound-replies.js";
+import nextBestActionRoutes from "./routes/nextBestAction.routes.js";
+import { Company } from "./models/company.model.js";
+import nextBestActionService from "./services/nextBestAction.service.js";
+
 
 // ==========================================================
 // Apply auth rate limiting to auth routes specifically
@@ -238,7 +250,8 @@ app.use("/api/v1/invite", invitationRoute);
 app.use("/api/v1/notifications", notificationsRoute);
 app.use("/api/v1/deal-health", dealHealthRouter);
 app.use("/api/v1/services", ServicesRouter);
-app.get("/api/email/track/open/:token", async(req, res) => {
+app.use("/api/v1/next-best-action", nextBestActionRoutes);
+app.get("/api/email/track/open/:token", async (req, res) => {
   try {
     const { token } = req.params;
     
@@ -246,7 +259,7 @@ app.get("/api/email/track/open/:token", async(req, res) => {
 
     // Update tracking in database
     await EngagementHistory.findOneAndUpdate(
-      { 
+      {
         leadId,
         "emailMetrics.messageId": token,
         engagementType: "email_sent"
@@ -263,17 +276,17 @@ app.get("/api/email/track/open/:token", async(req, res) => {
       },
       { new: true }
     );
-    
+
     console.log(`📬 Email opened with token: ${token}`);
     console.log(`👤 User Agent: ${req.headers['user-agent']}`);
     console.log(`🌐 IP: ${req.ip}`);
-    
+
     // Return a 1x1 transparent GIF pixel
     const pixel = Buffer.from(
       'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
       'base64'
     );
-    
+
     res.writeHead(200, {
       'Content-Type': 'image/gif',
       'Content-Length': pixel.length,
@@ -281,7 +294,7 @@ app.get("/api/email/track/open/:token", async(req, res) => {
       'Pragma': 'no-cache',
       'Expires': '0'
     });
-    
+
     res.end(pixel);
   } catch (error) {
     console.error('Error tracking email open:', error);

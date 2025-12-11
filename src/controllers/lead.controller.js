@@ -9,6 +9,7 @@ import emailService from "../services/email.service.js";
 import Notification from "../models/notifications.model.js";
 import ExcelJs from "exceljs";
 import { DealHealth } from "../models/dealHealth.model.js";
+import { NextBestAction } from "../models/nextBestAction.model.js";
 
 // ==============================================================
 // Lead Controller Functions
@@ -146,12 +147,23 @@ const getLeadById = asyncHandler(async (req, res) => {
     }
 
     // Lead deal health and score
-    const dealHealth = await DealHealth.findOne({ leadId: id }, { engagementMetrics: 1, velocityMetrics: 1, leadId: 1, 
-    companyId: 1,healthScore: 1, healthStatus: 1, aiAnalysis: 1  });
+    const dealHealth = await DealHealth.findOne({ leadId: id }, {
+      engagementMetrics: 1, velocityMetrics: 1, leadId: 1,
+      companyId: 1, healthScore: 1, healthStatus: 1, aiAnalysis: 1
+    });
+
+    // deal health NBA
+    const nextBestAction = await NextBestAction.findOne({ dealHealthId: dealHealth?._id }, {
+      actionType: 1,
+      title: 1,
+      description: 1,
+      channel: 1,
+      confidenceScore: 1
+    })
 
     return res
       .status(200)
-      .json(new ApiResponse(200, { leadData, dealHealth }, "Lead fetched successfully"));
+      .json(new ApiResponse(200, { leadData, dealHealth, nextBestAction }, "Lead fetched successfully"));
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(500, error.message || "Failed to fetch lead");
@@ -190,7 +202,7 @@ const updateLeadById = asyncHandler(async (req, res) => {
       { new: true }
     );
 
-    if(status === "qualified") {
+    if (status === "qualified") {
       // Create and emit real-time notification
       const newNotification = await Notification.create({
         companyId,
@@ -546,14 +558,14 @@ const followUpLeads = asyncHandler(async (req, res) => {
     const { companyId, status, search, page = 1 } = req.query;
     const limit = 5;
     const skip = (page - 1) * limit;
-    const companyObjId = mongoose.Types.ObjectId.isValid(companyId) 
-    ? new mongoose.Types.ObjectId(companyId) : req.company?._id;
+    const companyObjId = mongoose.Types.ObjectId.isValid(companyId)
+      ? new mongoose.Types.ObjectId(companyId) : req.company?._id;
     let filter = { companyId: companyObjId };
-    if(status !== "all") filter.status = status
-    if(search) filter.$or = [
+    if (status !== "all") filter.status = status
+    if (search) filter.$or = [
       { "leadId.fullName": { $regex: search, $options: "i" } },
       { "leadId.email": { $regex: search, $options: "i" } },
-    ] 
+    ]
 
     // const totalRecordsArr = await FollowUp.aggregate([
     //   {
@@ -586,29 +598,29 @@ const followUpLeads = asyncHandler(async (req, res) => {
       { $sort: { createdAt: -1 } },
       // { $skip: skip },
       // { $limit: limit },
-      { 
+      {
         $project: {
-        _id: 1,
-        companyId: 1,
-        channel: 1,
-        subject: 1,
-        message: 1,
-        status: 1,
-        scheduleDate: 1,
-        scheduled: 1,
-        dateOfSubmission: 1,
-        createdAt: 1,
-        updatedAt: 1,
+          _id: 1,
+          companyId: 1,
+          channel: 1,
+          subject: 1,
+          message: 1,
+          status: 1,
+          scheduleDate: 1,
+          scheduled: 1,
+          dateOfSubmission: 1,
+          createdAt: 1,
+          updatedAt: 1,
 
-        leadId: {
-          _id:1,
-          profilePic: 1,
-          fullName: 1,
-          email: 1,
-          company: 1,
+          leadId: {
+            _id: 1,
+            profilePic: 1,
+            fullName: 1,
+            email: 1,
+            company: 1,
+          }
         }
-      } 
-    }
+      }
     ])
     return res
       .status(200)
