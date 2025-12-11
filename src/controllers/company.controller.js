@@ -393,6 +393,9 @@ const resendVerificationCode = asyncHandler(async (req, res) => {
   // Generate new verification code
   const verificationCode = generateOtp();
 
+  // delete all if otp with provided email exists
+  await OTP.deleteMany({ email });
+
   // save verification code in otp model
   const newEmailOtp = await OTP.create({
     email,

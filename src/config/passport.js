@@ -3,6 +3,23 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as JwtStrategy, ExtractJwt } from "passport-jwt";
 import { Company } from "../models/company.model.js";
 
+// check email regex for personal email
+const isCorporateEmail = (email) => {
+  const domain = email.split("@")[1].toLowerCase();
+  const personalDomains = [
+    "gmail.com",
+    "yahoo.com",
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "icloud.com",
+    "aol.com"
+  ];
+
+  return !personalDomains.includes(domain);
+};
+
+
 // JWT Strategy for protecting routes
 passport.use(
   new JwtStrategy(
@@ -46,8 +63,15 @@ passport.use(
           return done(null, company);
         }
 
+        const email = profile.emails[0].value;
+
+        // check if try to signin using personal email
+        if(!isCorporateEmail(email)){
+          return done(null, false, { message: "Personal email addresses are not allowed. Use your company email." });
+        }
+
         // Check if company exists with same email
-        company = await Company.findOne({ email: profile.emails[0].value, provider: "local" });
+        company = await Company.findOne({ email, provider: "local" });
 
         if (company) {
           // Link Google account to existing company

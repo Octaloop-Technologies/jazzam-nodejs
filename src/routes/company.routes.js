@@ -60,7 +60,7 @@ router
     { scope: ["profile", "email"], session: false }));
 router.route("/auth/google/callback").get(
   passport.authenticate("google", {
-    failureRedirect: "/login?error=auth_failed",
+    failureRedirect: `${process.env.CLIENT_URL}/login?error=personal_email`,
     session: false,
   }),
   googleLoginCallback
