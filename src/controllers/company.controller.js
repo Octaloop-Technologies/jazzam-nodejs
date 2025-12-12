@@ -446,19 +446,31 @@ const loginCompany = asyncHandler(async (req, res) => {
   }
 
   // Check if company is active
-  if (!company.isActive) {
+  if (!company?.isActive) {
     throw new ApiError(403, "Company account is deactivated");
   }
 
   const verifyEmailRedirect = `${process.env.CLIENT_URL}/verify-email/${email}?error=email_not_verified`;
 
   // Check if email is verified
-  if (!company.emailVerified) {
-    return res.status(200).json({ redirect: verifyEmailRedirect } );
+  if (!company?.emailVerified) {
+    // generate random 6 digit code
+    const verificationCode = generateOtp()
+
+    await OTP.deleteMany({ email }); 
+
+    // save verification code in otp model
+    const newEmailOtp = await OTP.create({
+      email,
+      otp: verificationCode,
+    });
+
+    await newEmailOtp.save();
+    return res.status(200).json({ redirect: verifyEmailRedirect });
   }
 
   // Check if password is correct
-  const isPasswordValid = await bcrypt.compare(password, company.password);
+  const isPasswordValid = await bcrypt.compare(password, company?.password);
 
   console.log("isPasswordValid*******", isPasswordValid)
 
@@ -468,7 +480,7 @@ const loginCompany = asyncHandler(async (req, res) => {
 
   // Generate access and refresh token
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-    company._id
+    company?._id
   );
 
   const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
@@ -524,7 +536,7 @@ const completeCompanyOnboarding = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Service type is required and cannot be empty");
   }
 
-  if(!subServices || subServices.length === 0){
+  if (!subServices || subServices.length === 0) {
     throw new ApiError(400, "Sub Service type is required and cannot be empty");
   }
 
@@ -544,7 +556,7 @@ const completeCompanyOnboarding = asyncHandler(async (req, res) => {
         description: description.trim(),
         companyServiceType: service.trim(),
         companySubServices: subServices,
-        companyOnboarding: true, 
+        companyOnboarding: true,
       },
     },
     { new: true }
