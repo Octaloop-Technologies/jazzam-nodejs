@@ -450,6 +450,13 @@ const loginCompany = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Company account is deactivated");
   }
 
+  const verifyEmailRedirect = `${process.env.CLIENT_URL}/verify-email/${email}?error=email_not_verified`;
+
+  // Check if email is verified
+  if (!company.emailVerified) {
+    return res.status(200).json({ redirect: verifyEmailRedirect } );
+  }
+
   // Check if password is correct
   const isPasswordValid = await bcrypt.compare(password, company.password);
 
