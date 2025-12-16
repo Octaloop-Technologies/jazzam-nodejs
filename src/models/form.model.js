@@ -522,5 +522,7 @@ formSchema.statics.createPlatformTemplate = function (formType, companyId) {
 // Create indexes for better query performance
 formSchema.index({ createdAt: -1 });
 formSchema.index({ "stats.submissions": -1 });
+formSchema.index({ companyId: 1, formType: 1 });
+formSchema.index({ accessToken: 1 });
 
-export const Form = mongoose.model("Form", formSchema);
+export { formSchema };

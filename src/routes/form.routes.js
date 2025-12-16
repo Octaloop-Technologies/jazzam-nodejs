@@ -13,6 +13,7 @@ import {
   removeFormField,
 } from "../controllers/form.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { injectTenantConnection } from "../middlewares/tenant.middleware.js";
 
 const router = Router();
 
@@ -21,16 +22,17 @@ const router = Router();
 // ================================================
 
 // POST /api/v1/forms/:accessToken/submit (Form submission)
+// Note: This route needs special handling for tenant context
 router.route("/:accessToken/submit").post(submitFormData);
 
 // GET /api/v1/forms/:accessToken (Public form access) - Must be last to avoid conflicts
 router.route("/:accessToken").get(getFormByAccessToken);
 
 // ================================================
-// Secured routes (authentication required)
+// Secured routes (authentication + tenant context required)
 // ================================================
 
-router.use(verifyJWT);
+router.use(verifyJWT, injectTenantConnection);
 
 // Platform-specific form routes (must be before parameterized routes)
 // POST /api/v1/forms/platform/create (Create platform-specific form)

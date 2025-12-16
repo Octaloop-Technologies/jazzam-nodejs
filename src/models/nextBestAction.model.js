@@ -3,12 +3,12 @@ import mongoose, { Schema } from "mongoose";
 const nextBestActionSchema = new Schema(
   {
     // References
-    companyId: {
-      type: Schema.Types.ObjectId,
-      ref: "Company",
-      required: true,
-      index: true,
-    },
+    // companyId: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "Company",
+    //   required: true,
+    //   index: true,
+    // },
     leadId: {
       type: Schema.Types.ObjectId,
       ref: "Lead",
@@ -161,16 +161,18 @@ const nextBestActionSchema = new Schema(
 );
 
 // Indexes
-nextBestActionSchema.index({ companyId: 1, leadId: 1, status: 1 });
-nextBestActionSchema.index({ companyId: 1, status: 1, priority: 1 });
-nextBestActionSchema.index({ companyId: 1, createdAt: -1 });
+nextBestActionSchema.index({ leadId: 1, status: 1 });
+nextBestActionSchema.index({ status: 1, priority: 1 });
+nextBestActionSchema.index({ createdAt: -1 });
 nextBestActionSchema.index({ leadId: 1, isActive: 1 });
 nextBestActionSchema.index({ expiresAt: 1 }, { sparse: true });
 
 // TTL index for auto-removal of expired actions
 nextBestActionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, sparse: true });
 
-export const NextBestAction = mongoose.model(
-  "NextBestAction",
-  nextBestActionSchema
-);
+export { nextBestActionSchema }
+
+// export const NextBestAction = mongoose.model(
+//   "NextBestAction",
+//   nextBestActionSchema
+// );

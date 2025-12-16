@@ -1,15 +1,11 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { Lead } from "../models/lead.model.js";
+import { getTenantModels } from "../models/index.js";
 import mongoose from "mongoose";
 import bantService from "../services/bant.service.js";
-import FollowUp from "../models/followUp.model.js";
 import emailService from "../services/email.service.js";
-import Notification from "../models/notifications.model.js";
 import ExcelJs from "exceljs";
-import { DealHealth } from "../models/dealHealth.model.js";
-import { NextBestAction } from "../models/nextBestAction.model.js";
 
 // ==============================================================
 // Lead Controller Functions
@@ -28,24 +24,29 @@ const getLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
-    companyId
   } = req.query;
 
-  // Build match conditions - prefer query param, fallback to req.company._id
-  const matchConditions = {
-    companyId: mongoose.Types.ObjectId.isValid(companyId)
-      ? new mongoose.mongo.ObjectId(companyId)
-      : req.company._id
-  };
+  // Get tenant-specific models
+  const { Lead } = getTenantModels(req.tenantConnection);
 
+  // Build match conditions (NO companyId needed - separate DB per tenant!)
+  const matchConditions = {};
   if (status) matchConditions.status = status;
-  if (formId)
-    matchConditions.formId =
-      mongoose.Types.ObjectId.createFromHexString(formId);
   if (platform) matchConditions.platform = platform;
+  if (formId) matchConditions.formId = mongoose.Types.ObjectId.createFromHexString(formId);
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (companySize) matchConditions.companySize = companySize;
   if (source) matchConditions.source = source;
+  
+
+  // if (status) matchConditions.status = status;
+  // if (formId)
+  //   matchConditions.formId =
+  //     mongoose.Types.ObjectId.createFromHexString(formId);
+  // if (platform) matchConditions.platform = platform;
+  // if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
+  // if (companySize) matchConditions.companySize = companySize;
+  // if (source) matchConditions.source = source;
 
   // Build sort object
   const sortObj = {};
@@ -131,10 +132,10 @@ const getLeadById = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOne({
-      _id: id,
-      companyId: req.company._id,
-    }).populate("formId", "name status formType");
+    // Get tenant-specific models
+    const { Lead, DealHealth, NextBestAction } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findById(id).populate("formId", "name status formType");
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -149,7 +150,7 @@ const getLeadById = asyncHandler(async (req, res) => {
     // Lead deal health and score
     const dealHealth = await DealHealth.findOne({ leadId: id }, {
       engagementMetrics: 1, velocityMetrics: 1, leadId: 1,
-      companyId: 1, healthScore: 1, healthStatus: 1, aiAnalysis: 1
+      healthScore: 1, healthStatus: 1, aiAnalysis: 1
     });
 
     // deal health NBA
@@ -159,7 +160,7 @@ const getLeadById = asyncHandler(async (req, res) => {
       description: 1,
       channel: 1,
       confidenceScore: 1
-    })
+    });
 
     return res
       .status(200)
@@ -173,13 +174,16 @@ const getLeadById = asyncHandler(async (req, res) => {
 // Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { companyId, status, notes, tags, leadScore, qualificationScore, bant } = req.body;
+  const { status, notes, tags, leadScore, qualificationScore, bant } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid lead ID");
   }
 
   try {
+    // Get tenant-specific models
+    const { Lead, Notification } = getTenantModels(req.tenantConnection);
+
     // Map request body to lead schema fields
     const updateFields = {};
 
@@ -196,25 +200,25 @@ const updateLeadById = asyncHandler(async (req, res) => {
       };
     }
 
-    const updatedLead = await Lead.findOneAndUpdate(
-      { _id: id, companyId },
+    const updatedLead = await Lead.findByIdAndUpdate(
+      id,
       { $set: updateFields },
       { new: true }
     );
 
+    if (!updatedLead) {
+      throw new ApiError(404, "Lead not found");
+    }
+
     if (status === "qualified") {
       // Create and emit real-time notification
       const newNotification = await Notification.create({
-        companyId,
+        companyId: req.company._id,
         title: "Lead Qualified",
         message: `A ${updatedLead?.fullName} as a lead has been qualified.`
       });
       req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
       console.log(`🔔 Real-time notification sent for company`);
-    }
-
-    if (!updatedLead) {
-      throw new ApiError(404, "Lead not found");
     }
 
     return res
@@ -238,16 +242,17 @@ const searchLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
-    companyId
   } = req.query;
 
   if (!query || query.trim().length === 0) {
     throw new ApiError(400, "Search query is required");
   }
 
-  // Build match conditions - always filter by company
+  // Get tenant-specific models
+  const { Lead } = getTenantModels(req.tenantConnection);
+
+  // Build match conditions (NO companyId needed!)
   const matchConditions = {
-    companyId: companyId ?? req.company._id,
     $text: { $search: query.trim() },
   };
 
@@ -323,10 +328,10 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOne({
-      _id: id,
-      companyId: req.company._id,
-    });
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findById(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -348,10 +353,11 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
 // Get lead statistics
 const getLeadStats = asyncHandler(async (req, res) => {
   try {
-    const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company._id;
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
 
     const stats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       {
         $group: {
           _id: null,
@@ -387,28 +393,28 @@ const getLeadStats = asyncHandler(async (req, res) => {
     ]);
 
     const industryStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       { $group: { _id: "$companyIndustry", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const platformStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       { $group: { _id: "$platform", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const locationStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       { $group: { _id: "$location", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const formStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       {
         $lookup: {
           from: "forms",
@@ -464,10 +470,10 @@ const deleteLead = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOneAndDelete({
-      _id: id,
-      companyId: req.company._id,
-    });
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findByIdAndDelete(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -487,14 +493,17 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
   try {
     const leadId = req.params;
     const { subject, message, status, scheduledDate, scheduled } = req.body;
+    
+    // Get tenant-specific models
+    const { Lead, FollowUp, Notification } = getTenantModels(req.tenantConnection);
+    
     const transformedScheduleData = scheduledDate ? new Date(scheduledDate) : null;
     const transformLeadId = new mongoose.mongo.ObjectId(leadId);
     const lead = await Lead.findById(transformLeadId);
     if (!lead) {
-      return res.status(400).json({ success: false, message: "Lead " })
+      return res.status(400).json({ success: false, message: "Lead not found" })
     }
     const followUpData = {
-      companyId: lead?.companyId,
       leadId,
       channel: "email",
       subject,
@@ -507,7 +516,7 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
     const newLeadFollowup = await FollowUp.create(followUpData);
     // Create and emit real-time notification
     const newNotification = await Notification.create({
-      companyId: lead?.companyId,
+      companyId: req.company._id,
       title: "Follow Up Sent",
       message: `Follow up sent to ${lead.email}`
     });
@@ -528,6 +537,9 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
 // Follow up email for lead
 const followUpEmail = asyncHandler(async (req, res) => {
   try {
+    // Get tenant-specific models
+    const { Lead, FollowUp } = getTenantModels(req.tenantConnection);
+    
     const leadId = req.params?.id
     const lead = await Lead.findById(leadId);
     const findLead = await FollowUp.findOne({ leadId });
@@ -555,12 +567,13 @@ const followUpEmail = asyncHandler(async (req, res) => {
 // get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
-    const { companyId, status, search, page = 1 } = req.query;
+    // Get tenant-specific models
+    const { FollowUp } = getTenantModels(req.tenantConnection);
+    
+    const { status, search, page = 1 } = req.query;
     const limit = 5;
     const skip = (page - 1) * limit;
-    const companyObjId = mongoose.Types.ObjectId.isValid(companyId)
-      ? new mongoose.Types.ObjectId(companyId) : req.company?._id;
-    let filter = { companyId: companyObjId };
+    let filter = {};
     if (status !== "all") filter.status = status
     if (search) filter.$or = [
       { "leadId.fullName": { $regex: search, $options: "i" } },
@@ -639,6 +652,9 @@ const followUpLeads = asyncHandler(async (req, res) => {
 // schedule follow up lead
 const scheduleFollowUpLeads = asyncHandler(async (req, res) => {
   try {
+    // Get tenant-specific models
+    const { FollowUp } = getTenantModels(req.tenantConnection);
+    
     const leadId = req?.params?.id;
     const { date, subject, message } = req.body;
     const scheduleDate = new Date(date);
@@ -722,14 +738,12 @@ const scheduledLeads = async () => {
 
 // Export leads Excel - filter by status
 const exportLeadsExcel = asyncHandler(async (req, res) => {
-  const companyId = req.params;
   const { status } = req.query;
 
-  const companyObjId = mongoose.Types.ObjectId.isValid(companyId)
-    ? new mongoose.mongo.ObjectId(companyId)
-    : req.company?._id;
+  // Get tenant-specific models
+  const { Lead } = getTenantModels(req.tenantConnection);
 
-  const filter = { companyId: companyObjId };
+  const filter = {};
   if (status !== "overall") filter.status = status;
 
   const leads = await Lead.find(filter).select(
@@ -803,10 +817,10 @@ const qualifyLeadBANT = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOne({
-      _id: id,
-      companyId: req.company._id,
-    });
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findById(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -849,6 +863,9 @@ const batchQualifyLeadsBANT = asyncHandler(async (req, res) => {
   const { leadIds, filters } = req.body;
 
   try {
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
     let leads;
 
     if (leadIds && Array.isArray(leadIds) && leadIds.length > 0) {
@@ -863,11 +880,10 @@ const batchQualifyLeadsBANT = asyncHandler(async (req, res) => {
 
       leads = await Lead.find({
         _id: { $in: validIds },
-        companyId: req.company._id,
       });
     } else if (filters) {
       // Qualify leads based on filters
-      const matchConditions = { companyId: req.company._id };
+      const matchConditions = {};
 
       if (filters.status) matchConditions.status = filters.status;
       if (filters.formId)

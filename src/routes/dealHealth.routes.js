@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { injectTenantConnection } from "../middlewares/tenant.middleware.js";
 import {
   getLeadHealth,
   getDashboardMetrics,
@@ -12,8 +13,8 @@ import {
 
 const router = Router();
 
-// All routes require authentication
-router.use(verifyJWT);
+// All routes require authentication and tenant context
+router.use(verifyJWT, injectTenantConnection);
 
 // Get dashboard metrics for company
 // GET /api/v1/deal-health/dashboard

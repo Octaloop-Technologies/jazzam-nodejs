@@ -4,12 +4,12 @@ import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 const leadSchema = new Schema(
   {
     // Company Reference (Required for SAAS)
-    companyId: {
-      type: Schema.Types.ObjectId,
-      ref: "Company",
-      required: true,
-      index: true,
-    },
+    // companyId: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "Company",
+    //   required: true,
+    //   index: true,
+    // },
 
     // Form Reference (Which form generated this lead)
     formId: {
@@ -342,16 +342,21 @@ const leadSchema = new Schema(
 );
 
 // Create compound indexes for better query performance
-leadSchema.index({ companyId: 1, email: 1 });
-leadSchema.index({ companyId: 1, status: 1 });
-leadSchema.index({ companyId: 1, formId: 1 });
-leadSchema.index({ companyId: 1, platform: 1 });
-leadSchema.index({ companyId: 1, createdAt: -1 });
+// leadSchema.index({ companyId: 1, email: 1 });
+// leadSchema.index({ companyId: 1, status: 1 });
+// leadSchema.index({ companyId: 1, formId: 1 });
+// leadSchema.index({ companyId: 1, platform: 1 });
+// leadSchema.index({ companyId: 1, createdAt: -1 });
 // Ensure no duplicate leads per company for the same platform URL
-leadSchema.index({ companyId: 1, platformUrl: 1 }, { unique: true });
-leadSchema.index({ email: 1, companyId: 1 });
-leadSchema.index({ status: 1, companyIndustry: 1 });
+// leadSchema.index({ companyId: 1, platformUrl: 1 }, { unique: true });
+// leadSchema.index({ email: 1, companyId: 1 });
+// leadSchema.index({ status: 1, companyIndustry: 1 });
+// leadSchema.index({ createdAt: -1 });
+leadSchema.index({ status: 1 });
 leadSchema.index({ createdAt: -1 });
+leadSchema.index({ platform: 1, status: 1 });
+// Prevent duplicate leads per platform URL (per tenant DB)
+leadSchema.index({ platformUrl: 1 }, { unique: true });
 
 // Create text index for search functionality
 leadSchema.index({
@@ -366,12 +371,9 @@ leadSchema.index({
 // Add pagination plugin
 leadSchema.plugin(mongooseAggregatePaginate);
 
-// Static method to find leads by company and criteria
-leadSchema.statics.findByCompanyAndCriteria = function (
-  companyId,
-  searchQuery
-) {
-  const query = { companyId };
+// Static method to find leads by criteria (no companyId needed - separate DB!)
+leadSchema.statics.findByCriteria = function (searchQuery) {
+  const query = {};
 
   if (searchQuery.status) query.status = searchQuery.status;
   if (searchQuery.formId) query.formId = searchQuery.formId;
@@ -448,4 +450,4 @@ leadSchema.methods.syncToCRM = function (crmId) {
   return this.save();
 };
 
-export const Lead = mongoose.model("Lead", leadSchema);
+export { leadSchema };

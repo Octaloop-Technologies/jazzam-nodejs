@@ -1,10 +1,7 @@
 import mongoose from "mongoose";
 
 const NotiifcationSchema = new mongoose.Schema({
-    companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Company",
-    },
+    // companyId removed - separate DB per tenant provides isolation
     title: {
         type: String,
         required: true
@@ -19,5 +16,7 @@ const NotiifcationSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-const Notification = mongoose.model("notifications", NotiifcationSchema);
-export default Notification;
+export { NotiifcationSchema }
+
+// const Notification = mongoose.model("notifications", NotiifcationSchema);
+// export default Notification;

@@ -1,6 +1,5 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { Form } from "../models/form.model.js";
-import { Lead } from "../models/lead.model.js";
+import { getTenantModels } from "../models/index.js";
 import { CrmIntegration } from "../models/crmIntegration.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -8,10 +7,9 @@ import scrapingService from "../services/scraping.service.js";
 import emailService from "../services/email.service.js";
 import bantService from "../services/bant.service.js";
 import { syncLeadToCrm } from "../services/crm/sync.service.js";
-import FollowUp from "../models/followUp.model.js";
 import mongoose from "mongoose";
-import Notification from "../models/notifications.model.js";
 import dealHealthService from "../services/dealHealth.service.js";
+import { formSchema } from "../models/form.model.js";
 // import dealHealthService from "../services/dealHealth.service.js";
 
 // ==============================================================
@@ -20,6 +18,9 @@ import dealHealthService from "../services/dealHealth.service.js";
 
 const createPlatformForm = asyncHandler(async (req, res) => {
   const { formType } = req.body;
+
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
 
   // Validate form type
   const validTypes = ["linkedin", "meta", "twitter", "instagram"];
@@ -43,8 +44,9 @@ const createPlatformForm = asyncHandler(async (req, res) => {
     );
   }
 
-  // Create form using platform template
-  const formTemplate = Form.createPlatformTemplate(formType, req.company._id);
+  // Create form using platform template - call static method through schema
+  const baseModel = mongoose.model("Form", formSchema);
+  const formTemplate = baseModel.createPlatformTemplate(formType, req.company._id);
   const form = await Form.create(formTemplate);
 
   // Set form to active status
@@ -72,6 +74,9 @@ const createPlatformForm = asyncHandler(async (req, res) => {
 const getPlatformForms = asyncHandler(async (req, res) => {
   const { formType } = req.query;
 
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
+
   const query = { companyId: req.company._id };
   if (formType) query.formType = formType;
 
@@ -98,10 +103,13 @@ const getPlatformForms = asyncHandler(async (req, res) => {
 });
 
 const getAvailablePlatforms = asyncHandler(async (req, res) => {
-  // Get existing forms for this company
-  const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company._id
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
 
-  console.log("req query****", companyId)
+  // Get existing forms for this company
+  const companyId = req.company._id;
+
+  console.log("company ID****", companyId)
 
   let existingForms = await Form.find({
     companyId,
@@ -359,6 +367,30 @@ const submitFormData = asyncHandler(async (req, res) => {
   const { accessToken } = req.params;
   const formData = req.body;
 
+  // Note: This is a public endpoint (no auth), so we need to find the form first to get companyId
+  // Then get tenant connection dynamically based on form's companyId
+  
+  // First, find form by accessToken to get companyId (form is tenant-specific)
+  // We need to search across tenant databases or have a mapping
+  // For now, we'll use a different approach: find tenant via req.query.tenantId or embedded in token
+  
+  // IMPORTANT: For public form submissions, we need the tenant context
+  // Option 1: Include tenantId in the embed URL
+  // Option 2: Create a system-wide forms lookup table
+  // For this implementation, we'll assume tenantId is passed or we iterate
+  
+  // Temporary solution: Accept tenantId in request or extract from session/context
+  const tenantId = req.query.tenantId || req.body.tenantId;
+  
+  if (!tenantId) {
+    throw new ApiError(400, "Tenant context required for form submission");
+  }
+  
+  // Get tenant connection dynamically for this submission
+  const { getTenantConnection } = await import("../db/tenantConnection.js");
+  const tenantConnection = await getTenantConnection(tenantId);
+  const { Form, Lead, Notification } = getTenantModels(tenantConnection);
+
   const form = await Form.findOne({ accessToken }).populate("companyId");
 
   if (!form) {
@@ -395,15 +427,14 @@ const submitFormData = asyncHandler(async (req, res) => {
         throw new Error("Failed to scrape profile data");
       }
 
-      // Prevent duplicates: if a lead with the same platformUrl exists for this company, skip creation
+      // Prevent duplicates: if a lead with the same platformUrl exists, skip creation
       const existingLead = await Lead.findOne({
-        companyId: form.companyId,
         platformUrl: platformUrl,
       });
 
       if (existingLead) {
         console.log(
-          `ℹ️ Duplicate lead skipped for company ${form.companyId} and URL ${platformUrl}`
+          `ℹ️ Duplicate lead skipped for tenant ${tenantId} and URL ${platformUrl}`
         );
         return res
           .status(200)
@@ -416,9 +447,8 @@ const submitFormData = asyncHandler(async (req, res) => {
           );
       }
 
-      // Create lead record from scraped data
+      // Create lead record from scraped data (NO companyId - separate DB!)
       const leadData = {
-        companyId: form.companyId,
         formId: form._id,
         platform: form.formType,
         platformUrl: platformUrl,
