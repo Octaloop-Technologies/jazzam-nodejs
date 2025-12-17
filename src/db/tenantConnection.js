@@ -17,20 +17,20 @@ const MAX_POOL_SIZE = 50;
  */
 const CLEANUP_INTERVAL = 300000;
 
-export async function getTenantConnection(tenantId){
-    if(!tenantId){
+export async function getTenantConnection(tenantId) {
+    if (!tenantId) {
         throw new Error('Tenant ID is required');
     }
 
     // Check if connection exists in pool
-    if(tenantConnectionPool.has(tenantId)){
+    if (tenantConnectionPool.has(tenantId)) {
         const cachedConnection = tenantConnectionPool.get(tenantId);
 
         // update last used timestamp
         cachedConnection.lastUsed = Date.now();
 
         // Return connection if it's ready
-        if(cachedConnection.connection.readyState ===  1){
+        if (cachedConnection.connection.readyState === 1) {
             console.log(`Reusing connection for tenant: ${tenantId}`);
             return cachedConnection.connection;
         }
@@ -43,7 +43,10 @@ export async function getTenantConnection(tenantId){
     console.log(`Creating new connection for tenant: ${tenantId}`);
 
     const dbName = `jazzam_company_${tenantId}`;
-    const mongoUri = process.env.MONGODB_URI.replace(/\/[^\/]*$/, `/${dbName}`);
+    const mongoUri = process.env.MONGODB_URI.replace(
+        /\/([^\/\?]+)(\?|$)/,
+        `/${dbName}$2`
+    );
 
     const connection = mongoose.createConnection(mongoUri, {
         maxPoolSize: 10,
@@ -67,7 +70,7 @@ export async function getTenantConnection(tenantId){
     });
 
     // Enforce pool size limit
-    if(tenantConnectionPool.size > MAX_POOL_SIZE){
+    if (tenantConnectionPool.size > MAX_POOL_SIZE) {
         await cleanUpOldConnections();
     }
 
@@ -79,7 +82,7 @@ export async function getTenantConnection(tenantId){
 /**
  * Get shared system database connection
  */
-export function getSystemConnection(){
+export function getSystemConnection() {
     // Return the main mongoose connection
     return mongoose.connection;
 }
@@ -87,8 +90,8 @@ export function getSystemConnection(){
 /**
  * Close connection for specific tenant
  */
-export async function closeTenantConnection(tenantId){
-    if(tenantConnectionPool.has(tenantId)){
+export async function closeTenantConnection(tenantId) {
+    if (tenantConnectionPool.has(tenantId)) {
         const { connection } = tenantConnectionPool.get(tenantId);
         await connection.close();
         tenantConnectionPool.delete(tenantId);
@@ -100,32 +103,32 @@ export async function closeTenantConnection(tenantId){
  * Clean up old/unused connections
  */
 
-async function cleanUpOldConnections(){
+async function cleanUpOldConnections() {
     const now = Date.now();
     const maxIdleTime = 600000;
 
     const toRemove = [];
 
-    for(const [tenantId, { lastUsed, connection }] of tenantConnectionPool.entries()){
+    for (const [tenantId, { lastUsed, connection }] of tenantConnectionPool.entries()) {
         const idleTime = now - lastUsed;
 
-        if(idleTime > maxIdleTime){
+        if (idleTime > maxIdleTime) {
             toRemove.push(tenantId);
         }
     }
 
     // Remove oldest connection if pool is full
-    if(toRemove.length === 0 && tenantConnectionPool.size >= MAX_POOL_SIZE){
+    if (toRemove.length === 0 && tenantConnectionPool.size >= MAX_POOL_SIZE) {
         const sorted = Array.from(tenantConnectionPool.entries()).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
         toRemove.push(sorted[0][0]); // Remove oldest
     }
 
     // Close and remove connections
-    for (const tenantId of toRemove){
+    for (const tenantId of toRemove) {
         await closeTenantConnection(tenantId);
     }
 
-    if(toRemove.length > 0){
+    if (toRemove.length > 0) {
         console.log(`Cleaned ip ${toRemove.length} idle connections`);
     }
 }
@@ -138,7 +141,7 @@ setInterval(cleanUpOldConnections, CLEANUP_INTERVAL);
 /**
  * Close all tenant connections (for graceful shutdown)
  */
-export async function closeAllTenantConnections(){
+export async function closeAllTenantConnections() {
     console.log(`Closing all ${tenantConnectionPool.size} tenant connections...`);
 
     const closePromises = Array.from(tenantConnectionPool.keys()).map(
@@ -152,7 +155,7 @@ export async function closeAllTenantConnections(){
 /**
  * Get connection pool stats
  */
-export function getConnectionPoolStats(){
+export function getConnectionPoolStats() {
     return {
         activeConnections: tenantConnectionPool.size,
         maxPoolSize: MAX_POOL_SIZE,

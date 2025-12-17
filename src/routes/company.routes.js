@@ -30,22 +30,30 @@ import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import passport from "../config/passport.js";
 import { handleOAuthCallback } from "../controllers/crmIntegration.controller.js";
-import { enforceTenantScope, 
-  validateTeamAccess, 
-  validateTenantAccess } from "../middlewares/tenant.middleware.js";
-import { requirePermission } from "../middlewares/rbac.middleware.js";
 
 const router = Router();
 
 // ================================================
-// Public routes
+// Register and Login routes
 // ================================================
+
+// POST /api/v1/companies/auth/register
 router.route("/auth/register").post(registerCompany);
+
+// POST /api/v1/companies/auth/login
 router.route("/auth/login").post(loginCompany);
+
+// POST /api/v1/companies/auth/verify-email
 router.route("/auth/verify-email").post(verifyEmail);
+
+// POST /api/v1/companies/auth/resend-verification-code
 router.route("/auth/resend-verification-code").post(resendVerificationCode);
 
-// OAuth routes
+// ================================================
+// OAuth routes (Google, Zoho)
+// ================================================
+
+// GET /api/v1/companies/auth/google
 router
   .route("/auth/google")
   .get(passport.authenticate("google", 
@@ -57,90 +65,77 @@ router.route("/auth/google/callback").get(
   }),
   googleLoginCallback
 );
+
+// GET /api/v1/companies/auth/zoho
 router.route("/auth/zoho").get(zohoLogin);
 router.route("/auth/login/zoho/callback").get(zohoCallback);
 router.route("/auth/zoho/callback").get(handleOAuthCallback)
+
+// POST /api/v1/companies/auth/refresh-token
 router.route("/auth/refresh-token").post(refreshAccessToken);
 
 // ================================================
-// Secured routes - APPLY MIDDLEWARE
+// Secured routes
 // ================================================
-router.use(verifyJWT);
-router.use(enforceTenantScope); // ADD THIS - Global tenant scope
 
-// Basic authenticated routes
+router.use(verifyJWT);
+
+// POST /api/v1/companies/auth/logout
 router.route("/auth/logout").post(logoutCompany);
-router.route("/auth/current-company").get(getCurrentCompany);
+
+// Get all team members
+router.route("/auth/team-members/:id").get(companyTeamsMembers)
+
+// Get joined company
+router.route("/auth/joined-company/:id").get(getJoinedCompany)
+
+// Deactivate team member
+router.route("/auth/deactivate-member/:id").put(deactivateTeamMember)
+
+// Activate team member
+router.route("/auth/activate-member/:id").put(activateTeamMember);
+
+// Change company name
+router.route("/auth/change-name/:id").patch(changeCompanyName)
+
+// GET /api/v1/auth/companies/:id
+router.route("/:id").get(getCompanyDashboard)
+
+// POST /api/v1/companies/auth/change-password
 router.route("/auth/change-password").post(changeCurrentPassword);
 
-// Dashboard access - validate team membership
-router.route("/:id").get(
-  validateTeamAccess, 
-  getCompanyDashboard
-);
+// GET /api/v1/companies/auth/current-company
+router.route("/auth/current-company").get(getCurrentCompany);
 
-// Team management - require team permissions
-router.route("/auth/team-members/:id").get(
-  validateTeamAccess,
-  requirePermission('team:manage'),
-  companyTeamsMembers
-);
+// PATCH /api/v1/companies/auth/update-company
+router.route("/auth/update-company").patch(updateCompanyDetails);
 
-
-router.route("/auth/joined-company/:id").get(
-  validateTeamAccess,
-  getJoinedCompany
-);
-
-
-router.route("/auth/deactivate-member/:id").put(
-  validateTeamAccess,
-  requirePermission('team:remove'),
-  deactivateTeamMember
-);
-
-router.route("/auth/activate-member/:id").put(
-  validateTeamAccess,
-  requirePermission('team:manage'),
-  activateTeamMember);
-
-router.route("/auth/change-name/:id").patch(
-  validateTeamAccess,
-  requirePermission('company:write'),
-  changeCompanyName)
-
-// Company management
-router.route("/auth/update-company").patch(
-  requirePermission('company:write'),
-  updateCompanyDetails);
-
-
+// PATCH /api/v1/companies/auth/onboarding
 router.route("/auth/onboarding").patch(updateOnboardingStatus);
-router.route("/auth/company-onboarding").patch(completeCompanyOnboarding);
-router.route("/auth/update-user-type/:id").patch(updateUserType);
 
-// settings - require write permissions
+// PATCH /api/v1/companies/auth/companyOnboarding
+router.route("/auth/company-onboarding").patch(completeCompanyOnboarding);
+
+
+// PATCH /api/v1/companies/auth/update-user-type
+router.route("/auth/update-user-type/:id").patch(updateUserType)
+
+// ================================================
+// Company settings routes
+// ================================================
+
+// PATCH /api/v1/companies/logo
 router
   .route("/logo")
-  .patch(
-  upload.single("logo"), 
-  requirePermission('company:write'),
-  updateCompanyLogo
-);
+  .patch(verifyJWT, upload.single("logo"), updateCompanyLogo);
 
+// PATCH /api/v1/companies/subscription
+router.route("/subscription").patch(verifyJWT, updateSubscriptionStatus);
 
-router.route("/subscription").patch(
-  requirePermission('billing:write'),
-  updateSubscriptionStatus
-);
+// PATCH /api/v1/companies/settings
+router.route("/settings").patch(verifyJWT, updateSettings);
 
-router.route("/settings").patch(
-  requirePermission('settings:write'),
-  updateSettings);
-  
-router.route("/delete-account").delete(
-  requirePermission('company:delete'),  
-  deleteCompany
-);
+// DELETE /api/v1/companies/delete-account
+router.route("/delete-account").delete(verifyJWT, deleteCompany);
 
 export default router;

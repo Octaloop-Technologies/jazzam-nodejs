@@ -5,12 +5,16 @@ import jwt from "jsonwebtoken";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Validator } from "../utils/validator.js";
-import { Lead } from "../models/lead.model.js";
-import FollowUp from "../models/followUp.model.js";
+import { leadSchema } from "../models/lead.model.js";
+import { FollowUpLeadSchema } from "../models/followUp.model.js";
 import emailService from "../services/email.service.js";
 import { OTP } from "../models/otp.model.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import bcrypt from "bcrypt";
+import { getTenantConnection } from "../db/tenantConnection.js";
+import { getTenantModels } from "../models/index.js";
+import { formSchema } from "../models/form.model.js";
+import mongoose from "mongoose";
 
 // import {
 //   getAccessTokenCookieOptions,
@@ -566,11 +570,73 @@ const completeCompanyOnboarding = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Company not found");
   }
 
+  // 🆕 AUTO-CREATE FORMS IN TENANT DATABASE
+  try {
+    console.log(`🎯 Auto-creating forms for company: ${updatedCompany.companyName}`);
+    
+    // Get tenant connection
+    const tenantId = companyId.toString();
+    const tenantConnection = await getTenantConnection(tenantId);
+    const { Form } = getTenantModels(tenantConnection);
+    
+    // Create base model to access static methods
+    const baseModel = mongoose.model("Form", formSchema);
+    
+    // Define platform types to create
+    const platformTypes = ["linkedin", "meta", "twitter", "instagram"];
+    const createdForms = [];
+    
+    for (const platform of platformTypes) {
+      // Check if form already exists
+      const existingForm = await Form.findOne({ formType: platform });
+      
+      if (!existingForm) {
+        // Create form template
+        const formTemplate = baseModel.createPlatformTemplate(platform, companyId);
+        
+        // Create form in tenant database
+        const form = await Form.create(formTemplate);
+        form.status = "active";
+        await form.save();
+        
+        // Generate embed code with tenantId
+        form.generateEmbedCode();
+        if (form.embedUrl && !form.embedUrl.includes('tenantId=')) {
+          form.embedUrl = `${form.embedUrl}${form.embedUrl.includes('?') ? '&' : '?'}tenantId=${tenantId}`;
+        }
+        await form.save();
+        
+        createdForms.push({
+          platform,
+          formId: form._id,
+          accessToken: form.accessToken,
+          embedUrl: form.embedUrl
+        });
+        
+        console.log(`  ✅ Created ${platform} form`);
+      } else {
+        console.log(`  ⏭️  ${platform} form already exists`);
+      }
+    }
+    
+    // Increment company's form count
+    if (createdForms.length > 0) {
+      updatedCompany.formCount = (updatedCompany.formCount || 0) + createdForms.length;
+      await updatedCompany.save();
+    }
+    
+    console.log(`✅ Auto-created ${createdForms.length} forms for ${updatedCompany.companyName}`);
+    
+  } catch (formError) {
+    console.error("❌ Failed to auto-create forms:", formError);
+    // Don't fail the onboarding, just log the error
+  }
+
   return res.status(200).json(
     new ApiResponse(
       200,
       updatedCompany,
-      "Company onboarding completed successfully"
+      "Company onboarding completed successfully. Forms created automatically."
     )
   );
 });

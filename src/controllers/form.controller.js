@@ -1,6 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { getTenantModels } from "../models/index.js";
 import { CrmIntegration } from "../models/crmIntegration.model.js";
+import { Company } from "../models/company.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import scrapingService from "../services/scraping.service.js";
@@ -31,11 +32,8 @@ const createPlatformForm = asyncHandler(async (req, res) => {
     );
   }
 
-  // Check if company already has a form of this type
-  const existingForm = await Form.findOne({
-    companyId: req.company._id,
-    formType: formType,
-  });
+  // Check if company already has a form of this type (NO companyId filter needed!)
+  const existingForm = await Form.findOne({ formType: formType });
 
   if (existingForm) {
     throw new ApiError(
@@ -55,6 +53,13 @@ const createPlatformForm = asyncHandler(async (req, res) => {
 
   // Generate embed code after accessToken is created
   form.generateEmbedCode();
+  
+  // IMPORTANT: Add tenantId to embedUrl for public submissions
+  const tenantId = req.tenantId || req.company._id.toString();
+  if (form.embedUrl && !form.embedUrl.includes('tenantId=')) {
+    form.embedUrl = `${form.embedUrl}${form.embedUrl.includes('?') ? '&' : '?'}tenantId=${tenantId}`;
+  }
+  
   await form.save();
 
   // Increment company's form count
@@ -72,12 +77,17 @@ const createPlatformForm = asyncHandler(async (req, res) => {
 });
 
 const getPlatformForms = asyncHandler(async (req, res) => {
-  const { formType } = req.query;
+  const { formType, tenantId } = req.query;
 
-  // Get tenant-specific models
-  const { Form } = getTenantModels(req.tenantConnection);
+  // Get tenant-specific models - use provided tenantId or current tenant
+  let tenantConnection = req.tenantConnection;
+  if (tenantId) {
+    const { getTenantConnection } = await import("../db/tenantConnection.js");
+    tenantConnection = await getTenantConnection(tenantId);
+  }
+  const { Form } = getTenantModels(tenantConnection);
 
-  const query = { companyId: req.company._id };
+  const query = {}; // NO companyId filter needed!
   if (formType) query.formType = formType;
 
   const forms = await Form.find(query).sort({ createdAt: -1 });
@@ -112,7 +122,6 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
   console.log("company ID****", companyId)
 
   let existingForms = await Form.find({
-    companyId,
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl status");
 
@@ -147,6 +156,12 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
 
         // Generate embed code after accessToken is created
         form.generateEmbedCode();
+        
+        // Add tenantId to embedUrl
+        if (form.embedUrl && !form.embedUrl.includes('tenantId=')) {
+          form.embedUrl = `${form.embedUrl}${form.embedUrl.includes('?') ? '&' : '?'}tenantId=${companyId}`;
+        }
+        
         await form.save();
 
         console.log(`Created ${platform} form with URL: ${form.embedUrl}`);
@@ -158,7 +173,6 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
 
   // Refetch all forms after creation/fixing
   existingForms = await Form.find({
-    companyId: companyId,
     formType: { $in: ["linkedin", "meta", "twitter", "instagram"] },
   }).select("formType accessToken embedUrl");
 
@@ -260,9 +274,19 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
 });
 
 const getForms = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, status } = req.query;
+  const { page = 1, limit = 10, status, tenantId, companyId } = req.query;
 
-  const query = { companyId: req.company._id };
+  // Get tenant-specific models - use provided tenantId or current tenant
+  let tenantConnection = req.tenantConnection;
+  if (tenantId) {
+    const { getTenantConnection } = await import("../db/tenantConnection.js");
+    tenantConnection = await getTenantConnection(tenantId);
+  }
+  const { Form } = getTenantModels(tenantConnection);
+
+  const targetCompanyId = companyId || req.company._id;
+
+  const query = { companyId: targetCompanyId };
   if (status) query.status = status;
 
   const options = {
@@ -280,10 +304,21 @@ const getForms = asyncHandler(async (req, res) => {
 
 const getFormById = asyncHandler(async (req, res) => {
   const { formId } = req.params;
+  const { tenantId, companyId } = req.query;
+
+  // Get tenant-specific models - use provided tenantId or current tenant
+  let tenantConnection = req.tenantConnection;
+  if (tenantId) {
+    const { getTenantConnection } = await import("../db/tenantConnection.js");
+    tenantConnection = await getTenantConnection(tenantId);
+  }
+  const { Form } = getTenantModels(tenantConnection);
+
+  const targetCompanyId = companyId || req.company._id;
 
   const form = await Form.findOne({
     _id: formId,
-    companyId: req.company._id,
+    companyId: targetCompanyId,
   });
 
   if (!form) {
@@ -298,6 +333,9 @@ const getFormById = asyncHandler(async (req, res) => {
 const updateForm = asyncHandler(async (req, res) => {
   const { formId } = req.params;
   const { name, description, config, settings, status } = req.body;
+
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
 
   const form = await Form.findOneAndUpdate(
     { _id: formId, companyId: req.company._id },
@@ -325,6 +363,9 @@ const updateForm = asyncHandler(async (req, res) => {
 const deleteForm = asyncHandler(async (req, res) => {
   const { formId } = req.params;
 
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
+
   const form = await Form.findOneAndDelete({
     _id: formId,
     companyId: req.company._id,
@@ -341,6 +382,16 @@ const deleteForm = asyncHandler(async (req, res) => {
 
 const getFormByAccessToken = asyncHandler(async (req, res) => {
   const { accessToken } = req.params;
+  const { tenantId } = req.query;
+
+  if (!tenantId) {
+    throw new ApiError(400, "Tenant ID is required");
+  }
+
+  // Get tenant connection dynamically
+  const { getTenantConnection } = await import("../db/tenantConnection.js");
+  const tenantConnection = await getTenantConnection(tenantId);
+  const { Form } = getTenantModels(tenantConnection);
 
   const form = await Form.findOne({ accessToken });
 
@@ -367,23 +418,15 @@ const submitFormData = asyncHandler(async (req, res) => {
   const { accessToken } = req.params;
   const formData = req.body;
 
-  // Note: This is a public endpoint (no auth), so we need to find the form first to get companyId
-  // Then get tenant connection dynamically based on form's companyId
-  
-  // First, find form by accessToken to get companyId (form is tenant-specific)
-  // We need to search across tenant databases or have a mapping
-  // For now, we'll use a different approach: find tenant via req.query.tenantId or embedded in token
-  
-  // IMPORTANT: For public form submissions, we need the tenant context
-  // Option 1: Include tenantId in the embed URL
-  // Option 2: Create a system-wide forms lookup table
-  // For this implementation, we'll assume tenantId is passed or we iterate
-  
-  // Temporary solution: Accept tenantId in request or extract from session/context
+  // IMPORTANT: This is a public endpoint (no auth required)
+  // The tenantId should be included in the form URL (added during form creation)
   const tenantId = req.query.tenantId || req.body.tenantId;
   
   if (!tenantId) {
-    throw new ApiError(400, "Tenant context required for form submission");
+    throw new ApiError(
+      400,
+      "Tenant ID is required. Please use the correct form submission URL with tenantId parameter."
+    );
   }
   
   // Get tenant connection dynamically for this submission
@@ -391,7 +434,7 @@ const submitFormData = asyncHandler(async (req, res) => {
   const tenantConnection = await getTenantConnection(tenantId);
   const { Form, Lead, Notification } = getTenantModels(tenantConnection);
 
-  const form = await Form.findOne({ accessToken }).populate("companyId");
+  const form = await Form.findOne({ accessToken });
 
   if (!form) {
     throw new ApiError(404, "Form not found");
@@ -399,6 +442,12 @@ const submitFormData = asyncHandler(async (req, res) => {
 
   if (!form.isAccessible()) {
     throw new ApiError(403, "Form is not accessible");
+  }
+
+  // Fetch company from system DB
+  const company = await Company.findById(form.companyId);
+  if (!company) {
+    throw new ApiError(404, "Company not found");
   }
 
   // Validate form data based on form configuration
@@ -428,9 +477,7 @@ const submitFormData = asyncHandler(async (req, res) => {
       }
 
       // Prevent duplicates: if a lead with the same platformUrl exists, skip creation
-      const existingLead = await Lead.findOne({
-        platformUrl: platformUrl,
-      });
+      const existingLead = await Lead.findOne({ platformUrl: platformUrl });
 
       if (existingLead) {
         console.log(
@@ -480,15 +527,23 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
+      // Always create deal health and next best action for new leads
+      try {
+        await dealHealthService.calculateDealHealth(tenantConnection, lead._id);
+        console.log(`✅ Deal health calculated for lead: ${lead._id}`);
+      } catch (error) {
+        console.error("Failed to calculate deal health for lead:", error);
+      }
+
       // Send welcome email to lead if enabled and lead has email
       if (form.settings.autoResponse.enabled && lead.email) {
         try {
           const welcomeEmail = await emailService.sendWelcomeEmail(lead, form);
           await lead.updateEmailStatus("welcome", true);
           console.log(`✅ Welcome email sent to lead: ${lead.email}`);
-          // After lead creation and email sending:
+          // Log engagement only if email was sent successfully
           if(welcomeEmail.success === true){
-            await dealHealthService.logEngagement(lead.companyId, lead._id, {
+            await dealHealthService.logEngagement(tenantConnection, lead._id, {
               engagementType: "email_sent",
               emailMetrics: {
                 subject: "lead welcome email sent",
@@ -509,20 +564,20 @@ const submitFormData = asyncHandler(async (req, res) => {
       }
 
       // Send lead notification email to company when enabled in settings
-      if (form.companyId.settings?.leadNotifications) {
+      if (company.settings?.leadNotifications) {
         try {
           await emailService.sendLeadNotificationEmail(
             lead,
             form,
-            form.companyId
+            company
           );
           console.log(
-            `✅ Lead notification email sent to company: ${form.companyId.email}`
+            `✅ Lead notification email sent to company: ${company.email}`
           );
           
           // Create and emit real-time notification
           const newNotification = await Notification.create({
-            companyId: form.companyId,
+            companyId: company._id,
             title: "Newly Generated Lead",
             message: `New lead created using ${form.formType} platform for ${lead.email}`
           });
@@ -539,21 +594,21 @@ const submitFormData = asyncHandler(async (req, res) => {
         }
       } else {
         console.log(
-          `ℹ️ Lead notification email disabled for company: ${form.companyId._id}`
+          `ℹ️ Lead notification email disabled for company: ${company._id}`
         );
       }
 
       // Apply BANT qualification if enabled in company settings (async, non-blocking)
-      if (form.companyId.settings?.autoBANTQualification) {
+      if (company.settings?.autoBANTQualification) {
         qualifyLeadInBackground(lead);
       } else {
         console.log(
-          `[BANT] Auto-qualification disabled for company: ${form.companyId._id}`
+          `[BANT] Auto-qualification disabled for company: ${company._id}`
         );
       }
 
       // Sync lead to CRM if integration is active (async, non-blocking)
-      syncLeadToCrmInBackground(lead, form.companyId._id);
+      syncLeadToCrmInBackground(tenantConnection, lead, company._id);
     } catch (scrapingError) {
       console.log("errororor*******", scrapingError)
       console.error("Scraping Error Details:", scrapingError);
@@ -597,7 +652,7 @@ const qualifyLeadInBackground = async (lead) => {
 };
 
 // Sync lead to CRM in background (non-blocking)
-const syncLeadToCrmInBackground = async (lead, companyId) => {
+const syncLeadToCrmInBackground = async (tenantConnection, lead, companyId) => {
   try {
     console.log(`[CRM] Starting background sync for lead ${lead._id} to CRM`);
 
@@ -616,7 +671,7 @@ const syncLeadToCrmInBackground = async (lead, companyId) => {
 
     for (const crmIntegration of crmIntegrations) {
       try {
-        const syncResult = await syncLeadToCrm(lead._id, crmIntegration);
+        const syncResult = await syncLeadToCrm(tenantConnection, lead._id, crmIntegration);
 
         if (syncResult.success) {
           console.log(
@@ -645,6 +700,9 @@ const addFormField = asyncHandler(async (req, res) => {
   const { formId } = req.params;
   const field = req.body;
 
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
+
   const form = await Form.findOne({
     _id: formId,
     companyId: req.company._id,
@@ -663,6 +721,9 @@ const addFormField = asyncHandler(async (req, res) => {
 
 const removeFormField = asyncHandler(async (req, res) => {
   const { formId, fieldId } = req.params;
+
+  // Get tenant-specific models
+  const { Form } = getTenantModels(req.tenantConnection);
 
   const form = await Form.findOne({
     _id: formId,

@@ -78,10 +78,10 @@ cron.schedule("0 0 * * *", scheduledLeads, {
 });
 
 // cron job for inbound email's
-cron.schedule("*/5 * * * *",  async () => {
-  console.log("checking for email replies.....");
-  await checkReplies();
-}) 
+// cron.schedule("*/5 * * * *",  async () => {
+//   console.log("checking for email replies.....");
+//   await checkReplies();
+// }) 
 
 // Daily health recalculation at 2 AM
 cron.schedule("0 2 * * *", async () => {
@@ -223,7 +223,7 @@ import invitationRoute from "./routes/invitation.routes.js";
 import notificationsRoute from "./routes/notification.routes.js";
 import dealHealthRouter from "./routes/dealHealth.routes.js";
 import ServicesRouter from "./routes/services.routes.js";
-import { EngagementHistory } from "./models/engagementHistory.model.js";
+import { engagementHistorySchema } from "./models/engagementHistory.model.js";
 import dealHealthService from "./services/dealHealth.service.js";
 import checkReplies from "./utils/check-inbound-replies.js";
 import nextBestActionRoutes from "./routes/nextBestAction.routes.js";

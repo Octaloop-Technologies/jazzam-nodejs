@@ -1,7 +1,4 @@
-import { EngagementHistory } from "../models/engagementHistory.model.js";
-import { DealHealth } from "../models/dealHealth.model.js";
-import { Lead } from "../models/lead.model.js";
-import FollowUp from "../models/followUp.model.js";
+import { getTenantModels } from "../models/index.js";
 import OpenAI from "openai";
 import nextBestActionService from "./nextBestAction.service.js";
 
@@ -16,20 +13,20 @@ class DealHealthService {
   /**
    * Log engagement event
    */
-  async logEngagement(companyId, leadId, engagementData) {
+  async logEngagement(tenantConnection, leadId, engagementData) {
     try {
-      const engagement = new EngagementHistory({
-        companyId,
+      const { EngagementHistory } = getTenantModels(tenantConnection);
+      
+      const engagement = await EngagementHistory.create({
         leadId,
         ...engagementData,
         engagementDate: new Date(),
       });
 
-      await engagement.save();
       console.log(`[HEALTH] Engagement logged for lead ${leadId}`);
 
       // Trigger health score recalculation
-      await this.calculateDealHealth(companyId, leadId);
+      await this.calculateDealHealth(tenantConnection, leadId);
 
       return engagement;
     } catch (error) {
@@ -41,16 +38,18 @@ class DealHealthService {
   /**
    * Calculate deal health score for a lead
    */
-  async calculateDealHealth(companyId, leadId) {
+  async calculateDealHealth(tenantConnection, leadId) {
     try {
+      const { Lead, DealHealth, FollowUp } = getTenantModels(tenantConnection);
+      
       const lead = await Lead.findById(leadId);
       if (!lead) throw new Error("Lead not found");
 
       // Get engagement history
-      const engagements = await this.getEngagementHistory(companyId, leadId);
+      const engagements = await this.getEngagementHistory(tenantConnection, leadId);
       const metrics = await this.calculateEngagementMetrics(engagements, lead);
       const velocityMetrics = await this.calculateVelocityMetrics(engagements, lead);
-      const cadenceCompliance = await this.calculateCadenceCompliance(companyId, leadId);
+      const cadenceCompliance = await this.calculateCadenceCompliance(tenantConnection, leadId);
       const riskIndicators = this.calculateRiskIndicators(metrics, velocityMetrics, cadenceCompliance);
 
       // Calculate health score
@@ -69,13 +68,10 @@ class DealHealthService {
       );
 
       // Update or create deal health record
-      let dealHealth = await DealHealth.findOne({ companyId, leadId });
+      let dealHealth = await DealHealth.findOne({ leadId });
 
       if (!dealHealth) {
-        dealHealth = new DealHealth({
-          companyId,
-          leadId,
-        });
+        dealHealth = new DealHealth({ leadId });
       }
 
       // Update metrics
@@ -111,7 +107,7 @@ class DealHealthService {
       // Generate or refresh Next Best Action for this lead (non-blocking)
       try {
         nextBestActionService
-          .generateNextBestAction(companyId, leadId)
+          .generateNextBestAction(tenantConnection, leadId)
           .catch((err) =>
             console.error("[HEALTH] NextBestAction generation failed:", err.message)
           );
@@ -129,14 +125,14 @@ class DealHealthService {
   }
 
   /**
-   * Get engagement history for a lead (scoped by company)
+   * Get engagement history for a lead
    */
-  async getEngagementHistory(companyId, leadId, days = 90) {
+  async getEngagementHistory(tenantConnection, leadId, days = 90) {
+    const { EngagementHistory } = getTenantModels(tenantConnection);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
     return await EngagementHistory.find({
-      companyId,
       leadId,
       engagementDate: { $gte: startDate },
     }).sort({ engagementDate: -1 });
@@ -244,10 +240,11 @@ class DealHealthService {
   }
 
   /**
-   * Calculate cadence compliance (scoped by company)
+   * Calculate cadence compliance
    */
-  async calculateCadenceCompliance(companyId, leadId) {
-    const followUps = await FollowUp.find({ companyId, leadId })
+  async calculateCadenceCompliance(tenantConnection, leadId) {
+    const { FollowUp } = getTenantModels(tenantConnection);
+    const followUps = await FollowUp.find({ leadId })
       .sort({ dateOfSubmission: -1 })
       .limit(10);
 
@@ -488,9 +485,11 @@ Respond ONLY in valid JSON format:
   /**
    * Get dashboard metrics
    */
-  async getDashboardMetrics(companyId) {
+  async getDashboardMetrics(tenantConnection) {
     try {
-      const dealHealthRecords = await DealHealth.find({ companyId })
+      const { DealHealth } = getTenantModels(tenantConnection);
+      
+      const dealHealthRecords = await DealHealth.find({})
         .populate("leadId", "fullName email company status")
         .sort({ healthScore: -1 });
 
@@ -567,25 +566,23 @@ Respond ONLY in valid JSON format:
   /**
    * Batch calculate health for multiple leads
    */
-  async batchCalculateHealth(companyId, leadIds = null) {
+  async batchCalculateHealth(tenantConnection, leadIds = null) {
     try {
+      const { Lead } = getTenantModels(tenantConnection);
       let leads;
 
       if (leadIds && Array.isArray(leadIds)) {
-        leads = await Lead.find({
-          companyId,
-          _id: { $in: leadIds },
-        });
+        leads = await Lead.find({ _id: { $in: leadIds } });
       } else {
-        leads = await Lead.find({ companyId });
+        leads = await Lead.find({});
       }
 
       console.log(`[HEALTH] Batch calculating health for ${leads.length} leads`);
 
       for (const lead of leads) {
         try {
-          await this.calculateDealHealth(companyId, lead._id);
-          await this.delay(500); // Avoid overwhelming AI API
+          await this.calculateDealHealth(tenantConnection, lead._id);
+          await this.delay(500);
         } catch (error) {
           console.error(`[HEALTH] Failed to calculate health for lead ${lead._id}:`, error.message);
         }
