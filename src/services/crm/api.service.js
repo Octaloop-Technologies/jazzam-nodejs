@@ -162,6 +162,79 @@ export const zohoApi = {
       accessToken
     );
   },
+
+  /**
+   * Get single lead/contact from Zoho CRM
+   */
+  getRecord: async (accessToken, apiDomain, module, recordId) => {
+    const url = `${CRM_API_URLS.zoho.base(apiDomain)}/${module}/${recordId}`;
+    return await makeApiRequest(url, {}, accessToken);
+  },
+
+  /**
+   * Get contact from Zoho CRM
+   */
+  getContact: async (accessToken, apiDomain, contactId) => {
+    const url = `${CRM_API_URLS.zoho.base(apiDomain)}${CRM_API_URLS.zoho.contacts}/${contactId}`;
+    return await makeApiRequest(url, {}, accessToken);
+  },
+
+  /**
+   * Create contact in Zoho CRM
+   */
+  createContact: async (accessToken, apiDomain, contactData) => {
+    const url = `${CRM_API_URLS.zoho.base(apiDomain)}${CRM_API_URLS.zoho.contacts}`;
+
+    const zohoContact = {
+      data: [
+        {
+          Last_Name: contactData.name || contactData.lastName || "Unknown",
+          First_Name: contactData.firstName || "",
+          Email: contactData.email,
+          Phone: contactData.phone,
+          Account_Name: contactData.company,
+          Title: contactData.jobTitle,
+          Description: contactData.description || contactData.message,
+          ...contactData.customFields,
+        },
+      ],
+    };
+
+    const data = await makeApiRequest(
+      url,
+      {
+        method: "POST",
+        body: JSON.stringify(zohoContact),
+      },
+      accessToken
+    );
+
+    return {
+      id: data.data[0]?.details?.id,
+      status: data.data[0]?.status,
+      message: data.data[0]?.message,
+    };
+  },
+
+  /**
+   * Update contact in Zoho CRM
+   */
+  updateContact: async (accessToken, apiDomain, contactId, contactData) => {
+    const url = `${CRM_API_URLS.zoho.base(apiDomain)}${CRM_API_URLS.zoho.contacts}/${contactId}`;
+
+    const zohoContact = {
+      data: [contactData],
+    };
+
+    return await makeApiRequest(
+      url,
+      {
+        method: "PUT",
+        body: JSON.stringify(zohoContact),
+      },
+      accessToken
+    );
+  },
 };
 
 // ============================================
@@ -301,13 +374,24 @@ export const hubspotApi = {
   getContacts: async (accessToken, options = {}) => {
     const limit = options.limit || 100;
     const after = options.after || "";
+    // Sort by object ID (HubSpot's natural/default sort order in UI)
+    const sorts = options.sorts || "hs_object_id";
 
     const params = new URLSearchParams({
       limit,
       ...(after && { after }),
+      ...(sorts && { sorts }),
     });
 
     const url = `${CRM_API_URLS.hubspot.base}${CRM_API_URLS.hubspot.contacts}?${params}`;
+    return await makeApiRequest(url, {}, accessToken);
+  },
+
+  /**
+   * Get single contact from HubSpot by ID
+   */
+  getContact: async (accessToken, contactId) => {
+    const url = `${CRM_API_URLS.hubspot.base}${CRM_API_URLS.hubspot.contacts}/${contactId}`;
     return await makeApiRequest(url, {}, accessToken);
   },
 

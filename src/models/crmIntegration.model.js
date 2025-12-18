@@ -200,7 +200,7 @@ const crmIntegrationSchema = new Schema(
         },
         errorType: {
           type: String,
-          enum: ["auth", "sync", "api", "validation"],
+          enum: ["auth", "sync", "api", "validation", "webhook"],
         },
         errorMessage: {
           type: String,
@@ -227,6 +227,9 @@ const crmIntegrationSchema = new Schema(
       secret: {
         type: String,
       },
+      subscriptionId: {
+        type: String,  // HubSpot/CRM webhook subscription ID
+      },
       events: [
         {
           type: String,
@@ -236,9 +239,19 @@ const crmIntegrationSchema = new Schema(
             "lead_deleted",
             "contact_created",
             "contact_updated",
+            "contact.creation",
+            "contact.propertyChange",
+            "contact.deletion",
           ],
         },
       ],
+      lastReceivedAt: {
+        type: Date,
+      },
+      totalReceived: {
+        type: Number,
+        default: 0,
+      },
     },
 
     // Integration Metadata

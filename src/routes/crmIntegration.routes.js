@@ -18,6 +18,11 @@ import {
   getLeadsFromCrm,
   getCombinedLeads,
 } from "../controllers/crmIntegration.controller.js";
+import { 
+  enableWebhooks, 
+  disableWebhooks, 
+  getWebhookStatus 
+} from "../controllers/webhook.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -77,9 +82,19 @@ router.route("/error-logs").get(getCrmErrorLogs);
 // PATCH /api/v1/crm-integration/error-logs/:errorId/resolve (Resolve error)
 router.route("/error-logs/:errorId/resolve").patch(resolveCrmError);
 
-// GET /api/v1/crm-integration/error-logs (Get error logs)
+// GET /api/v1/crm-integration/leads (Get leads from CRM)
 router.get("/leads", getLeadsFromCrm);
-// GET /api/v1/crm-integration/error-logs (Get error logs)
+
+// GET /api/v1/crm-integration/leads/combined (Get combined leads)
 router.get("/leads/combined", getCombinedLeads);
+
+// POST /api/v1/crm-integration/:integrationId/enable-webhooks (Enable webhooks)
+router.post("/:integrationId/enable-webhooks", enableWebhooks);
+
+// POST /api/v1/crm-integration/:integrationId/disable-webhooks (Disable webhooks)
+router.post("/:integrationId/disable-webhooks", disableWebhooks);
+
+// GET /api/v1/crm-integration/:integrationId/webhook-status (Get webhook status)
+router.get("/:integrationId/webhook-status", getWebhookStatus);
 
 export default router;

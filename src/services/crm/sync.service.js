@@ -57,6 +57,11 @@ export const syncLeadToCrm = async (tenantConnection, leadId, crmIntegration) =>
 
     switch (crmIntegration.provider) {
       case "zoho":
+        // Add Lead_Source_System field to prevent sync loop
+        mappedData.customFields = {
+          ...mappedData.customFields,
+          Lead_Source_System: 'Jazzaam'  // Mark as originating from our platform
+        };
         result = await crmApi.createLead(
           accessToken,
           crmIntegration.credentials.apiDomain,
@@ -73,6 +78,11 @@ export const syncLeadToCrm = async (tenantConnection, leadId, crmIntegration) =>
         break;
 
       case "hubspot":
+        // Add lead_source_system property to prevent sync loop
+        mappedData.customFields = {
+          ...mappedData.customFields,
+          lead_source_system: 'Jazzaam'  // Mark as originating from our platform
+        };
         result = await crmApi.createContact(accessToken, mappedData);
         break;
 
@@ -88,10 +98,20 @@ export const syncLeadToCrm = async (tenantConnection, leadId, crmIntegration) =>
         throw new Error(`Unsupported provider: ${crmIntegration.provider}`);
     }
 
-    // Update lead with CRM ID
+    // Update lead with CRM ID and metadata
     lead.crmSyncStatus = "synced";
     lead.crmId = result.id;
-    lead.lastSyncedAt = new Date();
+    lead.crmSyncAt = new Date();
+    
+    // Set CRM metadata to track this is our lead
+    lead.crmMetadata = {
+      sourceSystem: 'Jazzaam',
+      lastSyncDirection: 'to_crm',
+      lastSyncedAt: new Date(),
+      syncVersion: (lead.crmMetadata?.syncVersion || 0) + 1,
+      crmProvider: crmIntegration.provider
+    };
+    
     await lead.save();
 
     // Update integration stats
@@ -269,6 +289,13 @@ export const importLeadsFromCrm = async (tenantConnection, crmIntegration, optio
 
     for (const crmLead of crmLeads) {
       try {
+        // Check if this lead should be imported (skip if originated from our platform)
+        if (!Lead.shouldImportFromCrm(crmLead, crmIntegration.provider)) {
+          console.log(`⏭️  Skipping lead - originated from our platform`);
+          results.skipped += 1;
+          continue;
+        }
+        
         const mappedLead = mapCrmLeadToFormat(crmLead, crmIntegration.provider);
 
         // Check if lead already exists
@@ -277,9 +304,23 @@ export const importLeadsFromCrm = async (tenantConnection, crmIntegration, optio
         });
 
         if (existingLead) {
+          // Don't update if lead originated from our platform
+          if (existingLead.crmMetadata?.sourceSystem === 'Jazzaam') {
+            console.log(`⏭️  Skipping update - lead originated from platform`);
+            results.skipped += 1;
+            continue;
+          }
+          
           // Update existing lead
           Object.assign(existingLead, mappedLead);
-          existingLead.lastSyncedAt = new Date();
+          existingLead.crmSyncAt = new Date();
+          existingLead.crmMetadata = {
+            ...existingLead.crmMetadata,
+            lastSyncDirection: 'from_crm',
+            lastSyncedAt: new Date(),
+            syncVersion: (existingLead.crmMetadata?.syncVersion || 0) + 1,
+            crmProvider: crmIntegration.provider
+          };
           await existingLead.save();
           results.updated += 1;
         } else {
@@ -287,7 +328,14 @@ export const importLeadsFromCrm = async (tenantConnection, crmIntegration, optio
           await Lead.create({
             ...mappedLead,
             crmSyncStatus: "synced",
-            lastSyncedAt: new Date(),
+            crmSyncAt: new Date(),
+            crmMetadata: {
+              sourceSystem: crmIntegration.provider,
+              lastSyncDirection: 'from_crm',
+              lastSyncedAt: new Date(),
+              syncVersion: 1,
+              crmProvider: crmIntegration.provider
+            }
           });
           results.imported += 1;
         }

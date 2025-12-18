@@ -13,7 +13,7 @@ import {
   calculateTokenExpiry,
   getConfiguredProviders,
 } from "../services/crm/oauth.service.js";
-import { testCrmConnection as testCrmConnectionApi } from "../services/crm/api.service.js";
+import { getCrmApi, testCrmConnection as testCrmConnectionApi } from "../services/crm/api.service.js";
 import {
   syncLeadsToCrm as syncLeadsService,
   importLeadsFromCrm,
@@ -615,7 +615,7 @@ const resolveCrmError = asyncHandler(async (req, res) => {
  * @route GET /api/v1/crm-integration/leads
  */
 const getLeadsFromCrm = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 50, search } = req.query;
+  const { page = 1, limit = 25, search } = req.query;
 
   const crmIntegration = await CrmIntegration.findOne({
     companyId: req.company._id,
@@ -660,14 +660,41 @@ const getLeadsFromCrm = asyncHandler(async (req, res) => {
   try {
     switch (crmIntegration.provider) {
       case "hubspot": {
-        const options = {
-          limit: parseInt(limit),
-          after: (parseInt(page) - 1) * parseInt(limit),
-        };
+        const limitNum = parseInt(limit);
+        const pageNum = Math.max(1, parseInt(page));
 
-        const response = await crmApi.getContacts(accessToken, options);
-        crmLeads = response.results || [];
-        totalCount = response.total || crmLeads.length;
+        // Sort by object ID (natural HubSpot order) to match HubSpot UI pagination.
+        let response = null;
+        let cursor = undefined;
+
+        // Iterate through pages to reach the requested page
+        for (let current = 1; current <= pageNum; current++) {
+          const options = {
+            limit: limitNum,
+            sorts: "hs_object_id", // Sort by object ID (HubSpot's default sort order)
+          };
+          
+          // Add cursor for pages after the first
+          if (cursor) {
+            options.after = cursor;
+          }
+
+          response = await crmApi.getContacts(accessToken, options);
+
+          // If we've reached the desired page, stop
+          if (current === pageNum) break;
+
+          // Get cursor for next page
+          cursor = response?.paging?.next?.after;
+          if (!cursor) {
+            // No more pages available
+            response = { results: [], total: 0 };
+            break;
+          }
+        }
+
+        crmLeads = response?.results || [];
+        totalCount = response?.total || 0;
 
         // Transform HubSpot contacts to standard format
         crmLeads = crmLeads.map((contact) => ({

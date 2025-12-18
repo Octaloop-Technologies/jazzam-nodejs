@@ -229,6 +229,7 @@ import checkReplies from "./utils/check-inbound-replies.js";
 import nextBestActionRoutes from "./routes/nextBestAction.routes.js";
 import { Company } from "./models/company.model.js";
 import nextBestActionService from "./services/nextBestAction.service.js";
+import webhookRoutes from "./routes/webhook.routes.js";
 
 
 // ==========================================================
@@ -251,6 +252,7 @@ app.use("/api/v1/notifications", notificationsRoute);
 app.use("/api/v1/deal-health", dealHealthRouter);
 app.use("/api/v1/services", ServicesRouter);
 app.use("/api/v1/next-best-action", nextBestActionRoutes);
+app.use("/api/v1/webhooks", webhookRoutes);
 app.get("/api/email/track/open/:token", async (req, res) => {
   try {
     const { token } = req.params;
@@ -306,6 +308,7 @@ app.get("/api/email/track/open/:token", async (req, res) => {
     res.type('image/gif').send(pixel);
   }
 })
+// Webhook routes are registered below with other routes
 
 // ==========================================================
 // Error handling middleware (must be last)

@@ -12,10 +12,11 @@ const leadSchema = new Schema(
     // },
 
     // Form Reference (Which form generated this lead)
+    // Note: Optional for CRM-imported leads
     formId: {
       type: Schema.Types.ObjectId,
       ref: "Form",
-      required: true,
+      required: false,
       index: true,
     },
 
@@ -317,6 +318,33 @@ const leadSchema = new Schema(
       type: Date,
     },
 
+    // CRM Metadata for bidirectional sync and duplicate prevention
+    crmMetadata: {
+      sourceSystem: {
+        type: String,
+        enum: ['Jazzaam', 'HubSpot', 'Salesforce', 'Zoho', 'Manual', 'Import'],
+        default: 'Jazzaam'
+      },
+      lastSyncDirection: {
+        type: String,
+        enum: ['to_crm', 'from_crm']
+      },
+      lastSyncedAt: {
+        type: Date
+      },
+      syncVersion: {
+        type: Number,
+        default: 1
+      },
+      lastModifiedInCrm: {
+        type: Date
+      },
+      crmProvider: {
+        type: String,
+        enum: ['hubspot', 'salesforce', 'zoho', 'pipedrive', 'freshworks', 'monday']
+      }
+    },
+
     // Conversion Tracking
     conversionData: {
       converted: {
@@ -448,6 +476,47 @@ leadSchema.methods.syncToCRM = function (crmId) {
   this.crmSyncStatus = "synced";
   this.crmSyncAt = new Date();
   return this.save();
+};
+
+// Check if lead should be synced from CRM (prevents loops and duplicates)
+leadSchema.methods.shouldSyncFromCrm = function(crmContact, crmProvider) {
+  // Don't sync if this lead was created in our platform
+  if (this.crmMetadata?.sourceSystem === 'jazzaam') {
+    return false;
+  }
+  
+  // Don't sync if we recently synced (prevent rapid back-and-forth)
+  if (this.crmMetadata?.lastSyncedAt) {
+    const timeSinceSync = Date.now() - this.crmMetadata.lastSyncedAt.getTime();
+    if (timeSinceSync < 60000) { // Less than 1 minute
+      return false;
+    }
+  }
+  
+  // Check if CRM contact has our platform identifier
+  if (crmProvider === 'hubspot' && crmContact.properties?.lead_source_system === 'Jazzaam') {
+    return false;
+  }
+  
+  return true;
+};
+
+// Static method to check if lead should be imported from CRM
+leadSchema.statics.shouldImportFromCrm = function(crmContact, crmProvider) {
+  // Skip if contact originated from our platform
+  if (crmProvider === 'hubspot' && crmContact.properties?.lead_source_system === 'Jazzaam') {
+    return false;
+  }
+  
+  if (crmProvider === 'salesforce' && crmContact.Lead_Source_System__c === 'Jazzaam') {
+    return false;
+  }
+  
+  if (crmProvider === 'zoho' && crmContact.Lead_Source_System === 'Jazzaam') {
+    return false;
+  }
+  
+  return true;
 };
 
 export { leadSchema };
