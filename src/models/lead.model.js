@@ -316,6 +316,29 @@ const leadSchema = new Schema(
     crmSyncAt: {
       type: Date,
     },
+    // Track origin of lead for bidirectional sync
+    leadOrigin: {
+      type: String,
+      enum: ["platform", "crm", "imported"],
+      default: "platform",
+      index: true,
+    },
+    // Store original CRM provider if imported from CRM
+    originCrmProvider: {
+      type: String,
+      enum: ["zoho", "salesforce", "hubspot", "dynamics", null],
+      default: null,
+    },
+    // Unique identifier from the originating CRM (prevents duplicate syncing)
+    originCrmId: {
+      type: String,
+      trim: true,
+      sparse: true, // allows multiple null values
+    },
+    // Last synced information
+    lastSyncedAt: {
+      type: Date,
+    },
 
     // Conversion Tracking
     conversionData: {

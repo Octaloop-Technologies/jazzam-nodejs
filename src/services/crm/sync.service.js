@@ -92,6 +92,10 @@ export const syncLeadToCrm = async (tenantConnection, leadId, crmIntegration) =>
     lead.crmSyncStatus = "synced";
     lead.crmId = result.id;
     lead.lastSyncedAt = new Date();
+    // Mark that this lead originated from platform (not CRM)
+    if (!lead.leadOrigin) {
+      lead.leadOrigin = "platform";
+    }
     await lead.save();
 
     // Update integration stats
@@ -271,23 +275,34 @@ export const importLeadsFromCrm = async (tenantConnection, crmIntegration, optio
       try {
         const mappedLead = mapCrmLeadToFormat(crmLead, crmIntegration.provider);
 
-        // Check if lead already exists
+        // Check if lead already exists by email OR by originCrmId
         const existingLead = await Lead.findOne({
-          email: mappedLead.email,
+          $or: [
+            { email: mappedLead.email },
+            { originCrmId: mappedLead.crmId }
+          ]
         });
 
         if (existingLead) {
-          // Update existing lead
-          Object.assign(existingLead, mappedLead);
-          existingLead.lastSyncedAt = new Date();
-          await existingLead.save();
-          results.updated += 1;
+          // Update existing lead only if it's not a platform-originated lead
+          if (existingLead.leadOrigin !== "platform" || !existingLead.crmId) {
+            Object.assign(existingLead, mappedLead);
+            existingLead.lastSyncedAt = new Date();
+            await existingLead.save();
+            results.updated += 1;
+          } else {
+            // Skip leads that originated from platform (already synced to CRM)
+            results.skipped += 1;
+          }
         } else {
-          // Create new lead
+          // Create new lead from CRM
           await Lead.create({
             ...mappedLead,
             crmSyncStatus: "synced",
             lastSyncedAt: new Date(),
+            leadOrigin: "crm",
+            originCrmProvider: crmIntegration.provider,
+            originCrmId: mappedLead.crmId,
           });
           results.imported += 1;
         }
