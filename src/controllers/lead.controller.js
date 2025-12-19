@@ -15,175 +15,321 @@ import { refreshAccessToken, calculateTokenExpiry } from "../services/crm/oauth.
 // ==============================================================
 
 /**
- * Fetch leads from connected CRM
- * Returns leads that exist in CRM (for bidirectional sync)
+ * Import and save leads from connected CRMs to database
+ * Avoids duplicates by checking if lead was synced from platform
  */
-const fetchCrmLeads = async (companyId, options = {}) => {
+const importCrmLeadsToDatabase = async (companyId, tenantConnection) => {
   try {
-    // Get active CRM integration
-    const crmIntegration = await CrmIntegration.findOne({
+    // Get tenant models
+    const { Form } = getTenantModels(tenantConnection);
+    
+    // Get ALL active CRM integrations (user might have multiple CRMs connected)
+    const crmIntegrations = await CrmIntegration.find({
       companyId: companyId,
       status: "active",
     });
 
-    if (!crmIntegration) {
+    if (!crmIntegrations || crmIntegrations.length === 0) {
       return null;
     }
 
-    // Check if tokens need refresh
-    if (crmIntegration.needsTokenRefresh()) {
+    // Get or create a default form for CRM imports
+    let crmForm = await Form.findOne({ 
+      companyId, 
+      formType: 'custom',
+      'config.isCrmImportForm': true 
+    });
+
+    if (!crmForm) {
+      crmForm = await Form.create({
+        companyId,
+        formType: 'custom',
+        config: {
+          isCrmImportForm: true,
+          fields: [
+            { name: 'fullName', type: 'text', label: 'Full Name', required: true },
+            { name: 'email', type: 'email', label: 'Email', required: true },
+            { name: 'phone', type: 'tel', label: 'Phone', required: false },
+            { name: 'company', type: 'text', label: 'Company', required: false },
+            { name: 'jobTitle', type: 'text', label: 'Job Title', required: false },
+          ],
+          settings: {
+            theme: "default",
+            submitButtonText: "Import",
+            successMessage: "Lead imported from CRM",
+          },
+        },
+        name: 'CRM Import Form',
+        description: 'Default form for leads imported from connected CRMs',
+        isActive: true,
+      });
+    }
+
+    const crmFormId = crmForm._id;
+
+    // Collect leads from ALL connected CRMs
+    let allCrmLeads = [];
+
+    for (const crmIntegration of crmIntegrations) {
+      // Check if tokens need refresh
+      if (crmIntegration.needsTokenRefresh()) {
+        try {
+          const refreshedTokens = await refreshAccessToken(
+            crmIntegration.provider,
+            crmIntegration.tokens.refreshToken
+          );
+
+          crmIntegration.tokens.accessToken = refreshedTokens.accessToken;
+          crmIntegration.tokens.tokenExpiry = calculateTokenExpiry(
+            refreshedTokens.expiresIn
+          );
+          await crmIntegration.save();
+        } catch (error) {
+          console.error(`Token refresh failed for ${crmIntegration.provider}`);
+          continue;
+        }
+      }
+
+      // Get CRM API handler
+      const crmApi = getCrmApi(crmIntegration.provider);
+      if (!crmApi) {
+        continue;
+      }
+
+      const accessToken = crmIntegration.tokens.accessToken;
+      let crmLeads = [];
+
       try {
-        const refreshedTokens = await refreshAccessToken(
-          crmIntegration.provider,
-          crmIntegration.tokens.refreshToken
-        );
+        // Fetch leads based on provider
+        switch (crmIntegration.provider) {
+          case "hubspot": {
+            const hubspotOptions = {
+              limit: 100,
+              after: 0,
+            };
+            const response = await crmApi.getContacts(accessToken, hubspotOptions);
+            crmLeads = (response.results || []).map((contact) => ({
+              id: contact.id,
+              crmId: contact.id,
+              firstName: contact.properties?.firstname || "",
+              lastName: contact.properties?.lastname || "",
+              fullName: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""}`.trim(),
+              email: contact.properties?.email || "",
+              phone: contact.properties?.phone || "",
+              company: contact.properties?.company || "",
+              jobTitle: contact.properties?.jobtitle || "",
+              status: contact.properties?.hs_lead_status?.toLowerCase() || "new",
+              createdAt: contact.createdAt,
+              updatedAt: contact.updatedAt,
+              source: "HubSpot CRM",
+            }));
+            break;
+          }
 
-        crmIntegration.tokens.accessToken = refreshedTokens.accessToken;
-        crmIntegration.tokens.tokenExpiry = calculateTokenExpiry(
-          refreshedTokens.expiresIn
-        );
-        await crmIntegration.save();
+          case "salesforce": {
+            const sfOptions = {
+              limit: 100,
+              offset: 0,
+            };
+            const response = await crmApi.getLeads(
+              accessToken,
+              crmIntegration.credentials.instanceUrl,
+              sfOptions
+            );
+            crmLeads = (response.records || []).map((lead) => ({
+              id: lead.Id,
+              crmId: lead.Id,
+              firstName: lead.FirstName || "",
+              lastName: lead.LastName || "",
+              fullName: `${lead.FirstName || ""} ${lead.LastName || ""}`.trim(),
+              email: lead.Email || "",
+              phone: lead.Phone || "",
+              company: lead.Company || "",
+              jobTitle: lead.Title || "",
+              status: lead.Status?.toLowerCase() || "new",
+              createdAt: lead.CreatedDate,
+              updatedAt: lead.LastModifiedDate,
+              source: "Salesforce CRM",
+            }));
+            break;
+          }
+
+          case "zoho": {
+            const zohoOptions = {
+              page: 1,
+              perPage: 100,
+            };
+            const response = await crmApi.getLeads(
+              accessToken,
+              crmIntegration.credentials.apiDomain,
+              zohoOptions
+            );
+            crmLeads = (response.data || []).map((lead) => ({
+              id: lead.id,
+              crmId: lead.id,
+              firstName: lead.First_Name || "",
+              lastName: lead.Last_Name || "",
+              fullName: `${lead.First_Name || ""} ${lead.Last_Name || ""}`.trim(),
+              email: lead.Email || "",
+              phone: lead.Phone || "",
+              company: lead.Company || "",
+              jobTitle: lead.Title || "",
+              status: lead.Lead_Status?.toLowerCase() || "new",
+              createdAt: lead.Created_Time,
+              updatedAt: lead.Modified_Time,
+              source: "Zoho CRM",
+            }));
+            break;
+          }
+
+          case "dynamics": {
+            const dynamicsOptions = {
+              top: 100,
+              skip: 0,
+            };
+            const response = await crmApi.getLeads(
+              accessToken,
+              crmIntegration.credentials.resource,
+              dynamicsOptions
+            );
+            crmLeads = (response.value || []).map((lead) => ({
+              id: lead.leadid,
+              crmId: lead.leadid,
+              firstName: lead.firstname || "",
+              lastName: lead.lastname || "",
+              fullName: `${lead.firstname || ""} ${lead.lastname || ""}`.trim(),
+              email: lead.emailaddress1 || "",
+              phone: lead.telephone1 || "",
+              company: lead.companyname || "",
+              jobTitle: lead.jobtitle || "",
+              status: "new",
+              createdAt: lead.createdon,
+              updatedAt: lead.modifiedon,
+              source: "Dynamics 365 CRM",
+            }));
+            break;
+          }
+
+          default:
+            console.log(`Unknown CRM provider: ${crmIntegration.provider}`);
+            continue;
+        }
+
+        // Add leads from this CRM to the collection
+        allCrmLeads = [...allCrmLeads, ...crmLeads];
+        
       } catch (error) {
-        console.error("Token refresh failed:", error);
-        return null;
+        console.error(`Error fetching from ${crmIntegration.provider}`);
+        // Continue to next CRM integration
       }
     }
 
-    // Get CRM API handler
-    const crmApi = getCrmApi(crmIntegration.provider);
-    if (!crmApi) {
-      return null;
+    // Now save these CRM leads to database (avoiding duplicates)
+    const { Lead } = getTenantModels(tenantConnection);
+    
+    // Get all platform leads that have been synced to CRMs
+    const syncedLeads = await Lead.find({ crmId: { $ne: null } }).select('crmId email');
+    const syncedCrmIds = syncedLeads.map(lead => lead.crmId);
+    const syncedEmails = syncedLeads.map(lead => lead.email).filter(Boolean);
+
+    console.log(`Platform has ${syncedCrmIds.length} leads synced to CRMs`);
+
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const crmLead of allCrmLeads) {
+      try {
+        // Skip if this CRM lead was originally synced FROM our platform
+        if (syncedCrmIds.includes(crmLead.id)) {
+          skipped++;
+          continue;
+        }
+
+        // Check if lead already exists in database by email or originCrmId
+        const existingLead = await Lead.findOne({
+          $or: [
+            { email: crmLead.email },
+            { originCrmId: crmLead.id }
+          ]
+        });
+
+        if (existingLead) {
+          // Update existing CRM lead (only if it's not a platform-originated lead)
+          if (existingLead.leadOrigin === 'crm') {
+            existingLead.firstName = crmLead.firstName || existingLead.firstName;
+            existingLead.lastName = crmLead.lastName || existingLead.lastName;
+            existingLead.fullName = crmLead.fullName || existingLead.fullName;
+            existingLead.phone = crmLead.phone || existingLead.phone;
+            existingLead.company = crmLead.company || existingLead.company;
+            existingLead.jobTitle = crmLead.jobTitle || existingLead.jobTitle;
+            existingLead.status = crmLead.status || existingLead.status;
+            existingLead.lastSyncedAt = new Date();
+            await existingLead.save();
+            updated++;
+            console.log(`Updated CRM lead: ${crmLead.email}`);
+          } else {
+            // This is a platform lead, don't overwrite it
+            skipped++;
+            console.log(`Skipping update for platform lead: ${crmLead.email}`);
+          }
+        } else {
+          // Create new lead from CRM
+          // Map CRM status to valid lead status enum
+          let mappedStatus = 'new';
+          if (crmLead.status) {
+            const statusLower = crmLead.status.toLowerCase();
+            if (['hot', 'warm', 'cold', 'qualified'].includes(statusLower)) {
+              mappedStatus = statusLower;
+            }
+          }
+
+          // Determine CRM provider from source
+          const crmProvider = crmLead.source?.includes('HubSpot') ? 'hubspot' : 
+                             crmLead.source?.includes('Zoho') ? 'zoho' :
+                             crmLead.source?.includes('Salesforce') ? 'salesforce' :
+                             crmLead.source?.includes('Dynamics') ? 'dynamics' : null;
+
+          await Lead.create({
+            formId: crmFormId,
+            fullName: crmLead.fullName,
+            firstName: crmLead.firstName,
+            lastName: crmLead.lastName,
+            email: crmLead.email,
+            phone: crmLead.phone,
+            company: crmLead.company,
+            jobTitle: crmLead.jobTitle,
+            status: mappedStatus,
+            source: 'import', // Use valid enum value
+            leadOrigin: 'crm',
+            originCrmProvider: crmProvider,
+            originCrmId: crmLead.id,
+            crmId: crmLead.id,
+            crmSyncStatus: 'synced',
+            lastSyncedAt: new Date(),
+            platform: 'other',
+            platformUrl: `crm-${crmLead.id}`,
+            notes: `Imported from ${crmLead.source || 'CRM'}`,
+          });
+          imported++;
+          console.log(`Imported new CRM lead: ${crmLead.email}`);
+        }
+      } catch (error) {
+        console.error(`Error processing CRM lead ${crmLead.email}:`, error.message);
+        skipped++;
+      }
     }
 
-    const accessToken = crmIntegration.tokens.accessToken;
-    let crmLeads = [];
-
-    // Fetch leads based on provider
-    switch (crmIntegration.provider) {
-      case "hubspot": {
-        const hubspotOptions = {
-          limit: options.limit || 50,
-          after: options.after || 0,
-        };
-        const response = await crmApi.getContacts(accessToken, hubspotOptions);
-        crmLeads = (response.results || []).map((contact) => ({
-          id: contact.id,
-          crmId: contact.id,
-          firstName: contact.properties?.firstname || "",
-          lastName: contact.properties?.lastname || "",
-          fullName: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""}`.trim(),
-          email: contact.properties?.email || "",
-          phone: contact.properties?.phone || "",
-          company: contact.properties?.company || "",
-          jobTitle: contact.properties?.jobtitle || "",
-          status: contact.properties?.hs_lead_status?.toLowerCase() || "new",
-          createdAt: contact.createdAt,
-          updatedAt: contact.updatedAt,
-          source: "HubSpot CRM",
-        }));
-        break;
-      }
-
-      case "salesforce": {
-        const sfOptions = {
-          limit: options.limit || 50,
-          offset: ((options.page || 1) - 1) * (options.limit || 50),
-        };
-        const response = await crmApi.getLeads(
-          accessToken,
-          crmIntegration.credentials.instanceUrl,
-          sfOptions
-        );
-        crmLeads = (response.records || []).map((lead) => ({
-          id: lead.Id,
-          crmId: lead.Id,
-          firstName: lead.FirstName || "",
-          lastName: lead.LastName || "",
-          fullName: `${lead.FirstName || ""} ${lead.LastName || ""}`.trim(),
-          email: lead.Email || "",
-          phone: lead.Phone || "",
-          company: lead.Company || "",
-          jobTitle: lead.Title || "",
-          status: lead.Status?.toLowerCase() || "new",
-          createdAt: lead.CreatedDate,
-          updatedAt: lead.LastModifiedDate,
-          source: "Salesforce CRM",
-        }));
-        break;
-      }
-
-      case "zoho": {
-        const zohoOptions = {
-          page: options.page || 1,
-          perPage: options.limit || 50,
-        };
-        const response = await crmApi.getLeads(
-          accessToken,
-          crmIntegration.credentials.apiDomain,
-          zohoOptions
-        );
-        crmLeads = (response.data || []).map((lead) => ({
-          id: lead.id,
-          crmId: lead.id,
-          firstName: lead.First_Name || "",
-          lastName: lead.Last_Name || "",
-          fullName: `${lead.First_Name || ""} ${lead.Last_Name || ""}`.trim(),
-          email: lead.Email || "",
-          phone: lead.Phone || "",
-          company: lead.Company || "",
-          jobTitle: lead.Title || "",
-          status: lead.Lead_Status?.toLowerCase() || "new",
-          createdAt: lead.Created_Time,
-          updatedAt: lead.Modified_Time,
-          source: "Zoho CRM",
-        }));
-        break;
-      }
-
-      case "dynamics": {
-        const dynamicsOptions = {
-          top: options.limit || 50,
-          skip: ((options.page || 1) - 1) * (options.limit || 50),
-        };
-        const response = await crmApi.getLeads(
-          accessToken,
-          crmIntegration.credentials.resource,
-          dynamicsOptions
-        );
-        crmLeads = (response.value || []).map((lead) => ({
-          id: lead.leadid,
-          crmId: lead.leadid,
-          firstName: lead.firstname || "",
-          lastName: lead.lastname || "",
-          fullName: `${lead.firstname || ""} ${lead.lastname || ""}`.trim(),
-          email: lead.emailaddress1 || "",
-          phone: lead.telephone1 || "",
-          company: lead.companyname || "",
-          jobTitle: lead.jobtitle || "",
-          status: "new",
-          createdAt: lead.createdon,
-          updatedAt: lead.modifiedon,
-          source: "Dynamics 365 CRM",
-        }));
-        break;
-      }
-
-      default:
-        return null;
-    }
-
-    // Apply status filter if provided
-    if (options.status && crmLeads.length > 0) {
-      crmLeads = crmLeads.filter(lead => lead.status === options.status);
-    }
+    console.log(`Import summary: ${imported} imported, ${updated} updated, ${skipped} skipped`);
 
     return {
-      leads: crmLeads,
-      provider: crmIntegration.provider,
-      total: crmLeads.length,
+      imported,
+      updated,
+      skipped,
+      total: allCrmLeads.length,
     };
   } catch (error) {
-    console.error("Error fetching CRM leads:", error);
+    console.error("Error importing CRM leads:", error);
     return null;
   }
 };
@@ -191,6 +337,32 @@ const fetchCrmLeads = async (companyId, options = {}) => {
 // ==============================================================
 // Lead Controller Functions
 // ==============================================================
+
+// Manual trigger to import CRM leads
+const syncCrmLeads = asyncHandler(async (req, res) => {
+  console.log("📥 Manual CRM import triggered by user");
+  
+  try {
+    const importResult = await importCrmLeadsToDatabase(req.company._id, req.tenantConnection);
+    
+    if (!importResult) {
+      return res.status(200).json(
+        new ApiResponse(200, { imported: 0, updated: 0, skipped: 0, total: 0 }, "No active CRM integrations found")
+      );
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        importResult,
+        `Successfully synced: ${importResult.imported} new leads imported, ${importResult.updated} updated, ${importResult.skipped} skipped`
+      )
+    );
+  } catch (error) {
+    console.error("CRM sync error:", error);
+    throw new ApiError(500, `Failed to sync CRM leads: ${error.message}`);
+  }
+});
 
 // Get all leads for a company (including CRM leads - bidirectional sync)
 const getLeads = asyncHandler(async (req, res) => {
@@ -224,12 +396,9 @@ const getLeads = asyncHandler(async (req, res) => {
   const sortObj = {};
   sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sort: sortObj,
-  };
-
+  // If CRM leads are included, we need to fetch ALL leads first, then paginate after merging
+  const shouldIncludeCrm = includeCrmLeads === "true" || includeCrmLeads === true;
+  
   const pipeline = [
     { $match: matchConditions },
     {
@@ -272,65 +441,20 @@ const getLeads = asyncHandler(async (req, res) => {
     { $sort: sortObj },
   ];
 
+  // Query the database (includes both platform and imported CRM leads)
+  const options = {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    sort: sortObj,
+  };
+
   const result = await Lead.aggregatePaginate(
     Lead.aggregate(pipeline),
     options
   );
 
-  let allLeads = result.docs;
-  let totalResults = result.totalDocs;
-
-  // Fetch and merge CRM leads if enabled
-  if (includeCrmLeads === "true" || includeCrmLeads === true) {
-    try {
-      const crmLeadsData = await fetchCrmLeads(req.company._id, {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        status,
-      });
-
-      if (crmLeadsData && crmLeadsData.leads.length > 0) {
-        // Filter out CRM leads that were originally synced FROM our platform
-        const platformLeadCrmIds = allLeads
-          .filter(lead => lead.crmId)
-          .map(lead => lead.crmId);
-
-        const genuineCrmLeads = crmLeadsData.leads.filter(crmLead => 
-          !platformLeadCrmIds.includes(crmLead.id)
-        );
-
-        // Transform CRM leads to match our format
-        const transformedCrmLeads = genuineCrmLeads.map(crmLead => ({
-          ...crmLead,
-          _id: `crm_${crmLead.id}`, // Temporary ID for CRM leads
-          leadOrigin: "crm",
-          originCrmProvider: crmLeadsData.provider,
-          originCrmId: crmLead.id,
-          sourceType: "crm",
-          isCrmLead: true, // Flag to identify CRM-only leads
-        }));
-
-        // Merge leads
-        allLeads = [...allLeads, ...transformedCrmLeads];
-        totalResults = totalResults + transformedCrmLeads.length;
-
-        // Re-sort the merged array
-        allLeads.sort((a, b) => {
-          const aDate = new Date(a.createdAt || a.updatedAt);
-          const bDate = new Date(b.createdAt || b.updatedAt);
-          return sortOrder === "desc" ? bDate - aDate : aDate - bDate;
-        });
-
-        // Apply pagination to merged results
-        const startIndex = (parseInt(page) - 1) * parseInt(limit);
-        const endIndex = startIndex + parseInt(limit);
-        allLeads = allLeads.slice(startIndex, endIndex);
-      }
-    } catch (error) {
-      console.error("Error fetching CRM leads:", error);
-      // Continue with platform leads only if CRM fetch fails
-    }
-  }
+  const allLeads = result.docs;
+  const totalResults = result.totalDocs;
 
   // Transform the response to match frontend expectations (docs -> leads)
   const response = {
@@ -1212,5 +1336,6 @@ export {
   scheduleFollowUpLeads,
   scheduledLeads,
   createLeadFollowup,
-  exportLeadsExcel
+  exportLeadsExcel,
+  syncCrmLeads
 };

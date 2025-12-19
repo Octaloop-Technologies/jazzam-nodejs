@@ -28,6 +28,7 @@ import {
 import cron from "node-cron";
 import { scheduledLeads } from "./controllers/lead.controller.js";
 import { Server } from "socket.io";
+import { initCrmSyncCron } from "./services/crmSync.cron.js";
 
 
 
@@ -71,11 +72,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Socket.IO connection
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  // Join company-specific room
+  socket.on("join:company", (companyId) => {
+    const room = `company_${companyId}`;
+    socket.join(room);
+    console.log(`👤 Socket ${socket.id} joined room: ${room}`);
+    socket.emit("joined", { room, companyId });
+  });
+
+  // Leave company room
+  socket.on("leave:company", (companyId) => {
+    const room = `company_${companyId}`;
+    socket.leave(room);
+    console.log(`👋 Socket ${socket.id} left room: ${room}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
+});
+
+
+
 // cron job for followup scheduling
 cron.schedule("0 0 * * *", scheduledLeads, {
   scheduled: true,
   timezone: "Asia/Riyadh"
 });
+
+// CRM leads sync cron job (runs every 15 minutes)
+initCrmSyncCron();
 
 // cron job for inbound email's
 // cron.schedule("*/5 * * * *",  async () => {
@@ -229,6 +259,8 @@ import checkReplies from "./utils/check-inbound-replies.js";
 import nextBestActionRoutes from "./routes/nextBestAction.routes.js";
 import { Company } from "./models/company.model.js";
 import nextBestActionService from "./services/nextBestAction.service.js";
+import socketService from "./services/socket.service.js";
+socketService.initialize(io);
 
 
 // ==========================================================

@@ -53,13 +53,13 @@ const createPlatformForm = asyncHandler(async (req, res) => {
 
   // Generate embed code after accessToken is created
   form.generateEmbedCode();
-  
+
   // IMPORTANT: Add tenantId to embedUrl for public submissions
   const tenantId = req.tenantId || req.company._id.toString();
   if (form.embedUrl && !form.embedUrl.includes('tenantId=')) {
     form.embedUrl = `${form.embedUrl}${form.embedUrl.includes('?') ? '&' : '?'}tenantId=${tenantId}`;
   }
-  
+
   await form.save();
 
   // Increment company's form count
@@ -156,12 +156,12 @@ const getAvailablePlatforms = asyncHandler(async (req, res) => {
 
         // Generate embed code after accessToken is created
         form.generateEmbedCode();
-        
+
         // Add tenantId to embedUrl
         if (form.embedUrl && !form.embedUrl.includes('tenantId=')) {
           form.embedUrl = `${form.embedUrl}${form.embedUrl.includes('?') ? '&' : '?'}tenantId=${companyId}`;
         }
-        
+
         await form.save();
 
         console.log(`Created ${platform} form with URL: ${form.embedUrl}`);
@@ -421,14 +421,14 @@ const submitFormData = asyncHandler(async (req, res) => {
   // IMPORTANT: This is a public endpoint (no auth required)
   // The tenantId should be included in the form URL (added during form creation)
   const tenantId = req.query.tenantId || req.body.tenantId;
-  
+
   if (!tenantId) {
     throw new ApiError(
       400,
       "Tenant ID is required. Please use the correct form submission URL with tenantId parameter."
     );
   }
-  
+
   // Get tenant connection dynamically for this submission
   const { getTenantConnection } = await import("../db/tenantConnection.js");
   const tenantConnection = await getTenantConnection(tenantId);
@@ -527,6 +527,16 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
+      // Emit real-time event for new lead
+      if (req.io) {
+        req.io.to(`company_${company._id}`).emit("lead:new", {
+          type: "lead:new",
+          data: lead,
+          timestamp: new Date().toISOString(),
+        });
+        console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
+      }
+
       // Always create deal health and next best action for new leads
       try {
         await dealHealthService.calculateDealHealth(tenantConnection, lead._id);
@@ -542,7 +552,7 @@ const submitFormData = asyncHandler(async (req, res) => {
           await lead.updateEmailStatus("welcome", true);
           console.log(`✅ Welcome email sent to lead: ${lead.email}`);
           // Log engagement only if email was sent successfully
-          if(welcomeEmail.success === true){
+          if (welcomeEmail.success === true) {
             await dealHealthService.logEngagement(tenantConnection, lead._id, {
               engagementType: "email_sent",
               emailMetrics: {
@@ -574,7 +584,7 @@ const submitFormData = asyncHandler(async (req, res) => {
           console.log(
             `✅ Lead notification email sent to company: ${company.email}`
           );
-          
+
           // Create and emit real-time notification
           const newNotification = await Notification.create({
             companyId: company._id,
@@ -583,7 +593,7 @@ const submitFormData = asyncHandler(async (req, res) => {
           });
 
           // Emit notification to all connected clients of this company
-          req.io.emit(`notifications`, { action: "newNotification", notification: newNotification});
+          req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
           console.log(`🔔 Real-time notification sent for company`);
 
         } catch (error) {

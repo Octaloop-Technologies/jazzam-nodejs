@@ -200,7 +200,7 @@ const crmIntegrationSchema = new Schema(
         },
         errorType: {
           type: String,
-          enum: ["auth", "sync", "api", "validation"],
+          enum: ["auth", "sync", "api", "validation", "webhook", "token_refresh"],
         },
         errorMessage: {
           type: String,
