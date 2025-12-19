@@ -3,12 +3,12 @@ import mongoose, { mongo, Schema } from "mongoose";
 const dealHealthSchema = new Schema(
     {
         // References
-        companyId: {
-            type: Schema.Types.ObjectId,
-            ref: "Company",
-            required: true,
-            index: true
-        },
+        // companyId: {
+        //     type: Schema.Types.ObjectId,
+        //     ref: "Company",
+        //     required: true,
+        //     index: true
+        // },
         leadId: {
             type: Schema.Types.ObjectId,
             ref: "Lead",
@@ -112,9 +112,9 @@ const dealHealthSchema = new Schema(
 );
 
 // Indexes
-dealHealthSchema.index({ companyId: 1, leadId: 1 });
-dealHealthSchema.index({ companyId: 1, healthStatus: 1 });
-dealHealthSchema.index({ companyId: 1, lastAnalyzedAt: -1 });
-dealHealthSchema.index({ "riskIndicators.riskLevel": 1, companyId: 1 })
+dealHealthSchema.index({ leadId: 1 });
+dealHealthSchema.index({ healthStatus: 1 });
+dealHealthSchema.index({ lastAnalyzedAt: -1 });
+dealHealthSchema.index({ "riskIndicators.riskLevel": 1 });
 
-export const DealHealth = mongoose.model("DealHealth", dealHealthSchema)
+export { dealHealthSchema };

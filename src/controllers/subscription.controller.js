@@ -19,7 +19,7 @@ import {
   isPayfortConfigured,
 } from "../services/payfort.service.js";
 import { BillingHistory } from "../models/billingHistory.model.js";
-import Notification from "../models/notifications.model.js";
+import { NotiifcationSchema } from "../models/notifications.model.js";
 
 // ==============================================================
 // Checkout Session Creation

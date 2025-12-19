@@ -2,7 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import nextBestActionService from "../services/nextBestAction.service.js";
-import { NextBestAction } from "../models/nextBestAction.model.js";
+import { getTenantModels } from "../models/index.js";
 import mongoose from "mongoose";
 
 // Generate next best action for a lead
@@ -14,7 +14,7 @@ const generateAction = asyncHandler(async (req, res) => {
   }
 
   const action = await nextBestActionService.generateNextBestAction(
-    req.company._id,
+    req.tenantConnection,
     leadId
   );
 
@@ -34,7 +34,7 @@ const getLeadAction = asyncHandler(async (req, res) => {
   }
 
   const actions = await nextBestActionService.getActiveActions(
-    req.company._id,
+    req.tenantConnection,
     leadId
   );
 
@@ -58,7 +58,7 @@ const getPendingActions = asyncHandler(async (req, res) => {
   const { limit = 20, priority } = req.query;
 
   let actions = await nextBestActionService.getPendingActions(
-    req.company._id,
+    req.tenantConnection,
     parseInt(limit)
   );
 
@@ -94,7 +94,7 @@ const executeAction = asyncHandler(async (req, res) => {
   }
 
   const action = await nextBestActionService.executeAction(
-    req.company._id,
+    req.tenantConnection,
     actionId,
     req.user._id,
     {
@@ -149,7 +149,7 @@ const batchGenerateActions = asyncHandler(async (req, res) => {
   const { leadIds } = req.body;
 
   const result = await nextBestActionService.batchGenerateActions(
-    req.company._id,
+    req.tenantConnection,
     leadIds
   );
 
@@ -169,8 +169,10 @@ const getActionHistory = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid lead ID");
   }
 
+  // Get tenant-specific models
+  const { NextBestAction } = getTenantModels(req.tenantConnection);
+
   const actions = await NextBestAction.find({
-    companyId: req.company._id,
     leadId,
   })
     .sort({ createdAt: -1 })
@@ -189,9 +191,12 @@ const getActionHistory = asyncHandler(async (req, res) => {
 
 // Get action statistics
 const getActionStats = asyncHandler(async (req, res) => {
+  // Get tenant-specific models
+  const { NextBestAction } = getTenantModels(req.tenantConnection);
+
   const stats = await NextBestAction.aggregate([
     {
-      $match: { companyId: mongoose.Types.ObjectId(req.company._id) },
+      $match: {},
     },
     {
       $group: {
@@ -203,7 +208,7 @@ const getActionStats = asyncHandler(async (req, res) => {
 
   const priorityStats = await NextBestAction.aggregate([
     {
-      $match: { companyId: mongoose.Types.ObjectId(req.company._id) },
+      $match: {},
     },
     {
       $group: {
@@ -215,7 +220,7 @@ const getActionStats = asyncHandler(async (req, res) => {
 
   const actionTypeStats = await NextBestAction.aggregate([
     {
-      $match: { companyId: mongoose.Types.ObjectId(req.company._id) },
+      $match: {},
     },
     {
       $group: {

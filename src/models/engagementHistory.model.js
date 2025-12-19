@@ -1,13 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 
 const engagementHistorySchema = new Schema({
-    // References
-    companyId: {
-        type: Schema.Types.ObjectId,
-        ref: "Company",
-        required: true,
-        index: true
-    },
+    // References (companyId removed - separate DB per tenant)
     leadId: {
         type: Schema.Types.ObjectId,
         ref: "Lead",
@@ -61,8 +55,8 @@ const engagementHistorySchema = new Schema({
 }, { timestamps: true });
 
 // Indexes for better query performance
-engagementHistorySchema.index({ companyId: 1, leadId: 1, engagementDate: -1 }),
-engagementHistorySchema.index({ leadId: 1, engagementType: 1 }),
-engagementHistorySchema.index({ companyId: 1, engagementDate: -1 });
+engagementHistorySchema.index({ leadId: 1, engagementDate: -1 });
+engagementHistorySchema.index({ leadId: 1, engagementType: 1 });
+engagementHistorySchema.index({ engagementDate: -1 });
 
-export const EngagementHistory = mongoose.model("EngagementHistory", engagementHistorySchema)
+export { engagementHistorySchema };

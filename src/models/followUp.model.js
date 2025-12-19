@@ -1,10 +1,10 @@
 import mongoose from "mongoose";
 
-const FollowUpLead = new mongoose.Schema({
-    companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Company",
-    },
+const FollowUpLeadSchema = new mongoose.Schema({
+    // companyId: {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: "Company",
+    // },
     leadId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Lead",
@@ -40,5 +40,7 @@ const FollowUpLead = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-const FollowUp = mongoose.model('FollowUp', FollowUpLead);
-export default FollowUp;
+export { FollowUpLeadSchema }
+
+// const FollowUp = mongoose.model('FollowUp', FollowUpLead);
+// export default FollowUp;

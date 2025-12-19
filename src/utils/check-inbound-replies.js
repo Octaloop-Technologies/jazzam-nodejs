@@ -1,9 +1,9 @@
 // check-inbound-replies.js
 
 import { ImapFlow } from "imapflow";
-import { Lead } from "../models/lead.model.js";
+import { leadSchema } from "../models/lead.model.js";
 import dealHealthService from "../services/dealHealth.service.js";
-import { EngagementHistory } from "../models/engagementHistory.model.js";
+import { engagementHistorySchema } from "../models/engagementHistory.model.js";
 
 // In-memory cache for messageId to companyId mapping
 // In production, you should use a persistent storage like Redis or a DB collection

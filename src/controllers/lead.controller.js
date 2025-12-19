@@ -1,21 +1,370 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { Lead } from "../models/lead.model.js";
+import { getTenantModels } from "../models/index.js";
 import mongoose from "mongoose";
 import bantService from "../services/bant.service.js";
-import FollowUp from "../models/followUp.model.js";
 import emailService from "../services/email.service.js";
-import Notification from "../models/notifications.model.js";
 import ExcelJs from "exceljs";
-import { DealHealth } from "../models/dealHealth.model.js";
-import { NextBestAction } from "../models/nextBestAction.model.js";
+import { CrmIntegration } from "../models/crmIntegration.model.js";
+import { getCrmApi } from "../services/crm/api.service.js";
+import { refreshAccessToken, calculateTokenExpiry } from "../services/crm/oauth.service.js";
+
+// ==============================================================
+// Helper Functions
+// ==============================================================
+
+/**
+ * Import and save leads from connected CRMs to database
+ * Avoids duplicates by checking if lead was synced from platform
+ */
+const importCrmLeadsToDatabase = async (companyId, tenantConnection) => {
+  try {
+    // Get tenant models
+    const { Form } = getTenantModels(tenantConnection);
+    
+    // Get ALL active CRM integrations (user might have multiple CRMs connected)
+    const crmIntegrations = await CrmIntegration.find({
+      companyId: companyId,
+      status: "active",
+    });
+
+    if (!crmIntegrations || crmIntegrations.length === 0) {
+      return null;
+    }
+
+    // Get or create a default form for CRM imports
+    let crmForm = await Form.findOne({ 
+      companyId, 
+      formType: 'custom',
+      'config.isCrmImportForm': true 
+    });
+
+    if (!crmForm) {
+      crmForm = await Form.create({
+        companyId,
+        formType: 'custom',
+        config: {
+          isCrmImportForm: true,
+          fields: [
+            { name: 'fullName', type: 'text', label: 'Full Name', required: true },
+            { name: 'email', type: 'email', label: 'Email', required: true },
+            { name: 'phone', type: 'tel', label: 'Phone', required: false },
+            { name: 'company', type: 'text', label: 'Company', required: false },
+            { name: 'jobTitle', type: 'text', label: 'Job Title', required: false },
+          ],
+          settings: {
+            theme: "default",
+            submitButtonText: "Import",
+            successMessage: "Lead imported from CRM",
+          },
+        },
+        name: 'CRM Import Form',
+        description: 'Default form for leads imported from connected CRMs',
+        isActive: true,
+      });
+    }
+
+    const crmFormId = crmForm._id;
+
+    // Collect leads from ALL connected CRMs
+    let allCrmLeads = [];
+
+    for (const crmIntegration of crmIntegrations) {
+      // Check if tokens need refresh
+      if (crmIntegration.needsTokenRefresh()) {
+        try {
+          const refreshedTokens = await refreshAccessToken(
+            crmIntegration.provider,
+            crmIntegration.tokens.refreshToken
+          );
+
+          crmIntegration.tokens.accessToken = refreshedTokens.accessToken;
+          crmIntegration.tokens.tokenExpiry = calculateTokenExpiry(
+            refreshedTokens.expiresIn
+          );
+          await crmIntegration.save();
+        } catch (error) {
+          console.error(`Token refresh failed for ${crmIntegration.provider}`);
+          continue;
+        }
+      }
+
+      // Get CRM API handler
+      const crmApi = getCrmApi(crmIntegration.provider);
+      if (!crmApi) {
+        continue;
+      }
+
+      const accessToken = crmIntegration.tokens.accessToken;
+      let crmLeads = [];
+
+      try {
+        // Fetch leads based on provider
+        switch (crmIntegration.provider) {
+          case "hubspot": {
+            const hubspotOptions = {
+              limit: 100,
+              after: 0,
+            };
+            const response = await crmApi.getContacts(accessToken, hubspotOptions);
+            crmLeads = (response.results || []).map((contact) => ({
+              id: contact.id,
+              crmId: contact.id,
+              firstName: contact.properties?.firstname || "",
+              lastName: contact.properties?.lastname || "",
+              fullName: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""}`.trim(),
+              email: contact.properties?.email || "",
+              phone: contact.properties?.phone || "",
+              company: contact.properties?.company || "",
+              jobTitle: contact.properties?.jobtitle || "",
+              status: contact.properties?.hs_lead_status?.toLowerCase() || "new",
+              createdAt: contact.createdAt,
+              updatedAt: contact.updatedAt,
+              source: "HubSpot CRM",
+            }));
+            break;
+          }
+
+          case "salesforce": {
+            const sfOptions = {
+              limit: 100,
+              offset: 0,
+            };
+            const response = await crmApi.getLeads(
+              accessToken,
+              crmIntegration.credentials.instanceUrl,
+              sfOptions
+            );
+            crmLeads = (response.records || []).map((lead) => ({
+              id: lead.Id,
+              crmId: lead.Id,
+              firstName: lead.FirstName || "",
+              lastName: lead.LastName || "",
+              fullName: `${lead.FirstName || ""} ${lead.LastName || ""}`.trim(),
+              email: lead.Email || "",
+              phone: lead.Phone || "",
+              company: lead.Company || "",
+              jobTitle: lead.Title || "",
+              status: lead.Status?.toLowerCase() || "new",
+              createdAt: lead.CreatedDate,
+              updatedAt: lead.LastModifiedDate,
+              source: "Salesforce CRM",
+            }));
+            break;
+          }
+
+          case "zoho": {
+            const zohoOptions = {
+              page: 1,
+              perPage: 100,
+            };
+            const response = await crmApi.getLeads(
+              accessToken,
+              crmIntegration.credentials.apiDomain,
+              zohoOptions
+            );
+            crmLeads = (response.data || []).map((lead) => ({
+              id: lead.id,
+              crmId: lead.id,
+              firstName: lead.First_Name || "",
+              lastName: lead.Last_Name || "",
+              fullName: `${lead.First_Name || ""} ${lead.Last_Name || ""}`.trim(),
+              email: lead.Email || "",
+              phone: lead.Phone || "",
+              company: lead.Company || "",
+              jobTitle: lead.Title || "",
+              status: lead.Lead_Status?.toLowerCase() || "new",
+              createdAt: lead.Created_Time,
+              updatedAt: lead.Modified_Time,
+              source: "Zoho CRM",
+            }));
+            break;
+          }
+
+          case "dynamics": {
+            const dynamicsOptions = {
+              top: 100,
+              skip: 0,
+            };
+            const response = await crmApi.getLeads(
+              accessToken,
+              crmIntegration.credentials.resource,
+              dynamicsOptions
+            );
+            crmLeads = (response.value || []).map((lead) => ({
+              id: lead.leadid,
+              crmId: lead.leadid,
+              firstName: lead.firstname || "",
+              lastName: lead.lastname || "",
+              fullName: `${lead.firstname || ""} ${lead.lastname || ""}`.trim(),
+              email: lead.emailaddress1 || "",
+              phone: lead.telephone1 || "",
+              company: lead.companyname || "",
+              jobTitle: lead.jobtitle || "",
+              status: "new",
+              createdAt: lead.createdon,
+              updatedAt: lead.modifiedon,
+              source: "Dynamics 365 CRM",
+            }));
+            break;
+          }
+
+          default:
+            console.log(`Unknown CRM provider: ${crmIntegration.provider}`);
+            continue;
+        }
+
+        // Add leads from this CRM to the collection
+        allCrmLeads = [...allCrmLeads, ...crmLeads];
+        
+      } catch (error) {
+        console.error(`Error fetching from ${crmIntegration.provider}`);
+        // Continue to next CRM integration
+      }
+    }
+
+    // Now save these CRM leads to database (avoiding duplicates)
+    const { Lead } = getTenantModels(tenantConnection);
+    
+    // Get all platform leads that have been synced to CRMs
+    const syncedLeads = await Lead.find({ crmId: { $ne: null } }).select('crmId email');
+    const syncedCrmIds = syncedLeads.map(lead => lead.crmId);
+    const syncedEmails = syncedLeads.map(lead => lead.email).filter(Boolean);
+
+    console.log(`Platform has ${syncedCrmIds.length} leads synced to CRMs`);
+
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const crmLead of allCrmLeads) {
+      try {
+        // Skip if this CRM lead was originally synced FROM our platform
+        if (syncedCrmIds.includes(crmLead.id)) {
+          skipped++;
+          continue;
+        }
+
+        // Check if lead already exists in database by email or originCrmId
+        const existingLead = await Lead.findOne({
+          $or: [
+            { email: crmLead.email },
+            { originCrmId: crmLead.id }
+          ]
+        });
+
+        if (existingLead) {
+          // Update existing CRM lead (only if it's not a platform-originated lead)
+          if (existingLead.leadOrigin === 'crm') {
+            existingLead.firstName = crmLead.firstName || existingLead.firstName;
+            existingLead.lastName = crmLead.lastName || existingLead.lastName;
+            existingLead.fullName = crmLead.fullName || existingLead.fullName;
+            existingLead.phone = crmLead.phone || existingLead.phone;
+            existingLead.company = crmLead.company || existingLead.company;
+            existingLead.jobTitle = crmLead.jobTitle || existingLead.jobTitle;
+            existingLead.status = crmLead.status || existingLead.status;
+            existingLead.lastSyncedAt = new Date();
+            await existingLead.save();
+            updated++;
+            console.log(`Updated CRM lead: ${crmLead.email}`);
+          } else {
+            // This is a platform lead, don't overwrite it
+            skipped++;
+            console.log(`Skipping update for platform lead: ${crmLead.email}`);
+          }
+        } else {
+          // Create new lead from CRM
+          // Map CRM status to valid lead status enum
+          let mappedStatus = 'new';
+          if (crmLead.status) {
+            const statusLower = crmLead.status.toLowerCase();
+            if (['hot', 'warm', 'cold', 'qualified'].includes(statusLower)) {
+              mappedStatus = statusLower;
+            }
+          }
+
+          // Determine CRM provider from source
+          const crmProvider = crmLead.source?.includes('HubSpot') ? 'hubspot' : 
+                             crmLead.source?.includes('Zoho') ? 'zoho' :
+                             crmLead.source?.includes('Salesforce') ? 'salesforce' :
+                             crmLead.source?.includes('Dynamics') ? 'dynamics' : null;
+
+          await Lead.create({
+            formId: crmFormId,
+            fullName: crmLead.fullName,
+            firstName: crmLead.firstName,
+            lastName: crmLead.lastName,
+            email: crmLead.email,
+            phone: crmLead.phone,
+            company: crmLead.company,
+            jobTitle: crmLead.jobTitle,
+            status: mappedStatus,
+            source: 'import', // Use valid enum value
+            leadOrigin: 'crm',
+            originCrmProvider: crmProvider,
+            originCrmId: crmLead.id,
+            crmId: crmLead.id,
+            crmSyncStatus: 'synced',
+            lastSyncedAt: new Date(),
+            platform: 'other',
+            platformUrl: `crm-${crmLead.id}`,
+            notes: `Imported from ${crmLead.source || 'CRM'}`,
+          });
+          imported++;
+          console.log(`Imported new CRM lead: ${crmLead.email}`);
+        }
+      } catch (error) {
+        console.error(`Error processing CRM lead ${crmLead.email}:`, error.message);
+        skipped++;
+      }
+    }
+
+    console.log(`Import summary: ${imported} imported, ${updated} updated, ${skipped} skipped`);
+
+    return {
+      imported,
+      updated,
+      skipped,
+      total: allCrmLeads.length,
+    };
+  } catch (error) {
+    console.error("Error importing CRM leads:", error);
+    return null;
+  }
+};
 
 // ==============================================================
 // Lead Controller Functions
 // ==============================================================
 
-// Get all leads for a company
+// Manual trigger to import CRM leads
+const syncCrmLeads = asyncHandler(async (req, res) => {
+  console.log("📥 Manual CRM import triggered by user");
+  
+  try {
+    const importResult = await importCrmLeadsToDatabase(req.company._id, req.tenantConnection);
+    
+    if (!importResult) {
+      return res.status(200).json(
+        new ApiResponse(200, { imported: 0, updated: 0, skipped: 0, total: 0 }, "No active CRM integrations found")
+      );
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        importResult,
+        `Successfully synced: ${importResult.imported} new leads imported, ${importResult.updated} updated, ${importResult.skipped} skipped`
+      )
+    );
+  } catch (error) {
+    console.error("CRM sync error:", error);
+    throw new ApiError(500, `Failed to sync CRM leads: ${error.message}`);
+  }
+});
+
+// Get all leads for a company (including CRM leads - bidirectional sync)
 const getLeads = asyncHandler(async (req, res) => {
   const {
     page = 1,
@@ -28,21 +377,17 @@ const getLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
-    companyId
+    includeCrmLeads = "true", // New parameter to control CRM inclusion
   } = req.query;
 
-  // Build match conditions - prefer query param, fallback to req.company._id
-  const matchConditions = {
-    companyId: mongoose.Types.ObjectId.isValid(companyId)
-      ? new mongoose.mongo.ObjectId(companyId)
-      : req.company._id
-  };
+  // Get tenant-specific models
+  const { Lead } = getTenantModels(req.tenantConnection);
 
+  // Build match conditions (NO companyId needed - separate DB per tenant!)
+  const matchConditions = {};
   if (status) matchConditions.status = status;
-  if (formId)
-    matchConditions.formId =
-      mongoose.Types.ObjectId.createFromHexString(formId);
   if (platform) matchConditions.platform = platform;
+  if (formId) matchConditions.formId = mongoose.Types.ObjectId.createFromHexString(formId);
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (companySize) matchConditions.companySize = companySize;
   if (source) matchConditions.source = source;
@@ -51,12 +396,9 @@ const getLeads = asyncHandler(async (req, res) => {
   const sortObj = {};
   sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-  const options = {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    sort: sortObj,
-  };
-
+  // If CRM leads are included, we need to fetch ALL leads first, then paginate after merging
+  const shouldIncludeCrm = includeCrmLeads === "true" || includeCrmLeads === true;
+  
   const pipeline = [
     { $match: matchConditions },
     {
@@ -99,23 +441,33 @@ const getLeads = asyncHandler(async (req, res) => {
     { $sort: sortObj },
   ];
 
+  // Query the database (includes both platform and imported CRM leads)
+  const options = {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    sort: sortObj,
+  };
+
   const result = await Lead.aggregatePaginate(
     Lead.aggregate(pipeline),
     options
   );
 
+  const allLeads = result.docs;
+  const totalResults = result.totalDocs;
+
   // Transform the response to match frontend expectations (docs -> leads)
   const response = {
-    leads: result.docs,
-    totalResults: result.totalDocs,
-    page: result.page,
-    totalPages: result.totalPages,
-    hasNextPage: result.hasNextPage,
-    hasPrevPage: result.hasPrevPage,
-    limit: result.limit,
+    leads: allLeads,
+    totalResults: totalResults,
+    page: parseInt(page),
+    totalPages: Math.ceil(totalResults / parseInt(limit)),
+    hasNextPage: parseInt(page) < Math.ceil(totalResults / parseInt(limit)),
+    hasPrevPage: parseInt(page) > 1,
+    limit: parseInt(limit),
   };
 
-  console.log("dealhealth response*******", response.leads[0].dealHealth)
+  console.log("dealhealth response*******", response.leads[0]?.dealHealth)
 
   return res
     .status(200)
@@ -131,10 +483,10 @@ const getLeadById = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOne({
-      _id: id,
-      companyId: req.company._id,
-    }).populate("formId", "name status formType");
+    // Get tenant-specific models
+    const { Lead, DealHealth, NextBestAction } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findById(id).populate("formId", "name status formType");
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -149,7 +501,7 @@ const getLeadById = asyncHandler(async (req, res) => {
     // Lead deal health and score
     const dealHealth = await DealHealth.findOne({ leadId: id }, {
       engagementMetrics: 1, velocityMetrics: 1, leadId: 1,
-      companyId: 1, healthScore: 1, healthStatus: 1, aiAnalysis: 1
+      healthScore: 1, healthStatus: 1, aiAnalysis: 1
     });
 
     // deal health NBA
@@ -159,7 +511,7 @@ const getLeadById = asyncHandler(async (req, res) => {
       description: 1,
       channel: 1,
       confidenceScore: 1
-    })
+    });
 
     return res
       .status(200)
@@ -173,13 +525,16 @@ const getLeadById = asyncHandler(async (req, res) => {
 // Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { companyId, status, notes, tags, leadScore, qualificationScore, bant } = req.body;
+  const { status, notes, tags, leadScore, qualificationScore, bant } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid lead ID");
   }
 
   try {
+    // Get tenant-specific models
+    const { Lead, Notification } = getTenantModels(req.tenantConnection);
+
     // Map request body to lead schema fields
     const updateFields = {};
 
@@ -196,25 +551,25 @@ const updateLeadById = asyncHandler(async (req, res) => {
       };
     }
 
-    const updatedLead = await Lead.findOneAndUpdate(
-      { _id: id, companyId },
+    const updatedLead = await Lead.findByIdAndUpdate(
+      id,
       { $set: updateFields },
       { new: true }
     );
 
+    if (!updatedLead) {
+      throw new ApiError(404, "Lead not found");
+    }
+
     if (status === "qualified") {
       // Create and emit real-time notification
       const newNotification = await Notification.create({
-        companyId,
+        companyId: req.company._id,
         title: "Lead Qualified",
         message: `A ${updatedLead?.fullName} as a lead has been qualified.`
       });
       req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
       console.log(`🔔 Real-time notification sent for company`);
-    }
-
-    if (!updatedLead) {
-      throw new ApiError(404, "Lead not found");
     }
 
     return res
@@ -238,16 +593,17 @@ const searchLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
-    companyId
   } = req.query;
 
   if (!query || query.trim().length === 0) {
     throw new ApiError(400, "Search query is required");
   }
 
-  // Build match conditions - always filter by company
+  // Get tenant-specific models
+  const { Lead } = getTenantModels(req.tenantConnection);
+
+  // Build match conditions (NO companyId needed!)
   const matchConditions = {
-    companyId: companyId ?? req.company._id,
     $text: { $search: query.trim() },
   };
 
@@ -323,10 +679,10 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOne({
-      _id: id,
-      companyId: req.company._id,
-    });
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findById(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -348,10 +704,11 @@ const updateLeadStatus = asyncHandler(async (req, res) => {
 // Get lead statistics
 const getLeadStats = asyncHandler(async (req, res) => {
   try {
-    const companyId = mongoose.Types.ObjectId.isValid(req.query?.companyId) ? new mongoose.mongo.ObjectId(req.query?.companyId) : req.company._id;
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
 
     const stats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       {
         $group: {
           _id: null,
@@ -387,28 +744,28 @@ const getLeadStats = asyncHandler(async (req, res) => {
     ]);
 
     const industryStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       { $group: { _id: "$companyIndustry", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const platformStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       { $group: { _id: "$platform", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const locationStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       { $group: { _id: "$location", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const formStats = await Lead.aggregate([
-      { $match: { companyId, status: { $ne: null } } },
+      { $match: { status: { $ne: null } } },
       {
         $lookup: {
           from: "forms",
@@ -464,10 +821,10 @@ const deleteLead = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOneAndDelete({
-      _id: id,
-      companyId: req.company._id,
-    });
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findByIdAndDelete(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -487,14 +844,17 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
   try {
     const leadId = req.params;
     const { subject, message, status, scheduledDate, scheduled } = req.body;
+    
+    // Get tenant-specific models
+    const { Lead, FollowUp, Notification } = getTenantModels(req.tenantConnection);
+    
     const transformedScheduleData = scheduledDate ? new Date(scheduledDate) : null;
     const transformLeadId = new mongoose.mongo.ObjectId(leadId);
     const lead = await Lead.findById(transformLeadId);
     if (!lead) {
-      return res.status(400).json({ success: false, message: "Lead " })
+      return res.status(400).json({ success: false, message: "Lead not found" })
     }
     const followUpData = {
-      companyId: lead?.companyId,
       leadId,
       channel: "email",
       subject,
@@ -507,7 +867,7 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
     const newLeadFollowup = await FollowUp.create(followUpData);
     // Create and emit real-time notification
     const newNotification = await Notification.create({
-      companyId: lead?.companyId,
+      companyId: req.company._id,
       title: "Follow Up Sent",
       message: `Follow up sent to ${lead.email}`
     });
@@ -528,6 +888,9 @@ const createLeadFollowup = asyncHandler(async (req, res) => {
 // Follow up email for lead
 const followUpEmail = asyncHandler(async (req, res) => {
   try {
+    // Get tenant-specific models
+    const { Lead, FollowUp } = getTenantModels(req.tenantConnection);
+    
     const leadId = req.params?.id
     const lead = await Lead.findById(leadId);
     const findLead = await FollowUp.findOne({ leadId });
@@ -555,12 +918,13 @@ const followUpEmail = asyncHandler(async (req, res) => {
 // get all leads
 const followUpLeads = asyncHandler(async (req, res) => {
   try {
-    const { companyId, status, search, page = 1 } = req.query;
+    // Get tenant-specific models
+    const { FollowUp } = getTenantModels(req.tenantConnection);
+    
+    const { status, search, page = 1 } = req.query;
     const limit = 5;
     const skip = (page - 1) * limit;
-    const companyObjId = mongoose.Types.ObjectId.isValid(companyId)
-      ? new mongoose.Types.ObjectId(companyId) : req.company?._id;
-    let filter = { companyId: companyObjId };
+    let filter = {};
     if (status !== "all") filter.status = status
     if (search) filter.$or = [
       { "leadId.fullName": { $regex: search, $options: "i" } },
@@ -639,6 +1003,9 @@ const followUpLeads = asyncHandler(async (req, res) => {
 // schedule follow up lead
 const scheduleFollowUpLeads = asyncHandler(async (req, res) => {
   try {
+    // Get tenant-specific models
+    const { FollowUp } = getTenantModels(req.tenantConnection);
+    
     const leadId = req?.params?.id;
     const { date, subject, message } = req.body;
     const scheduleDate = new Date(date);
@@ -722,14 +1089,12 @@ const scheduledLeads = async () => {
 
 // Export leads Excel - filter by status
 const exportLeadsExcel = asyncHandler(async (req, res) => {
-  const companyId = req.params;
   const { status } = req.query;
 
-  const companyObjId = mongoose.Types.ObjectId.isValid(companyId)
-    ? new mongoose.mongo.ObjectId(companyId)
-    : req.company?._id;
+  // Get tenant-specific models
+  const { Lead } = getTenantModels(req.tenantConnection);
 
-  const filter = { companyId: companyObjId };
+  const filter = {};
   if (status !== "overall") filter.status = status;
 
   const leads = await Lead.find(filter).select(
@@ -803,10 +1168,10 @@ const qualifyLeadBANT = asyncHandler(async (req, res) => {
   }
 
   try {
-    const lead = await Lead.findOne({
-      _id: id,
-      companyId: req.company._id,
-    });
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
+    const lead = await Lead.findById(id);
 
     if (!lead) {
       throw new ApiError(404, "Lead not found");
@@ -849,6 +1214,9 @@ const batchQualifyLeadsBANT = asyncHandler(async (req, res) => {
   const { leadIds, filters } = req.body;
 
   try {
+    // Get tenant-specific models
+    const { Lead } = getTenantModels(req.tenantConnection);
+
     let leads;
 
     if (leadIds && Array.isArray(leadIds) && leadIds.length > 0) {
@@ -863,11 +1231,10 @@ const batchQualifyLeadsBANT = asyncHandler(async (req, res) => {
 
       leads = await Lead.find({
         _id: { $in: validIds },
-        companyId: req.company._id,
       });
     } else if (filters) {
       // Qualify leads based on filters
-      const matchConditions = { companyId: req.company._id };
+      const matchConditions = {};
 
       if (filters.status) matchConditions.status = filters.status;
       if (filters.formId)
@@ -969,5 +1336,6 @@ export {
   scheduleFollowUpLeads,
   scheduledLeads,
   createLeadFollowup,
-  exportLeadsExcel
+  exportLeadsExcel,
+  syncCrmLeads
 };

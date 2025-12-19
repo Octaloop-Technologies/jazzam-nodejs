@@ -1,4 +1,5 @@
-import { Lead } from "../../models/lead.model.js";
+import { getTenantModels } from "../../models/index.js";
+import { getTenantConnection } from "../../db/tenantConnection.js";
 import { CrmIntegration } from "../../models/crmIntegration.model.js";
 import { getCrmApi } from "./api.service.js";
 import { refreshAccessToken } from "./oauth.service.js";
@@ -15,8 +16,10 @@ import { refreshAccessToken } from "./oauth.service.js";
 /**
  * Sync a single lead to CRM
  */
-export const syncLeadToCrm = async (leadId, crmIntegration) => {
+export const syncLeadToCrm = async (tenantConnection, leadId, crmIntegration) => {
   try {
+    const { Lead } = getTenantModels(tenantConnection);
+    
     // Get lead data
     const lead = await Lead.findById(leadId);
 
@@ -89,6 +92,10 @@ export const syncLeadToCrm = async (leadId, crmIntegration) => {
     lead.crmSyncStatus = "synced";
     lead.crmId = result.id;
     lead.lastSyncedAt = new Date();
+    // Mark that this lead originated from platform (not CRM)
+    if (!lead.leadOrigin) {
+      lead.leadOrigin = "platform";
+    }
     await lead.save();
 
     // Update integration stats
@@ -104,7 +111,8 @@ export const syncLeadToCrm = async (leadId, crmIntegration) => {
     console.error(`Failed to sync lead ${leadId}:`, error);
 
     // Update lead sync status
-    if (leadId) {
+    if (leadId && tenantConnection) {
+      const { Lead } = getTenantModels(tenantConnection);
       await Lead.findByIdAndUpdate(leadId, {
         crmSyncStatus: "failed",
         syncError: error.message,
@@ -118,7 +126,7 @@ export const syncLeadToCrm = async (leadId, crmIntegration) => {
 /**
  * Sync multiple leads to CRM
  */
-export const syncLeadsToCrm = async (leadIds, crmIntegration) => {
+export const syncLeadsToCrm = async (tenantConnection, leadIds, crmIntegration) => {
   const results = {
     successful: [],
     failed: [],
@@ -127,7 +135,7 @@ export const syncLeadsToCrm = async (leadIds, crmIntegration) => {
 
   for (const leadId of leadIds) {
     try {
-      const result = await syncLeadToCrm(leadId, crmIntegration);
+      const result = await syncLeadToCrm(tenantConnection, leadId, crmIntegration);
       results.successful.push(result);
     } catch (error) {
       results.failed.push({
@@ -169,8 +177,11 @@ export const autoSyncNewLead = async (lead, companyId) => {
       return { success: false, reason: "Auto-sync is disabled" };
     }
 
+    // Get tenant connection
+    const tenantConnection = await getTenantConnection(companyId.toString());
+
     // Sync lead
-    const result = await syncLeadToCrm(lead._id, crmIntegration);
+    const result = await syncLeadToCrm(tenantConnection, lead._id, crmIntegration);
 
     return { success: true, result };
   } catch (error) {
@@ -186,8 +197,10 @@ export const autoSyncNewLead = async (lead, companyId) => {
 /**
  * Fetch and import leads from CRM
  */
-export const importLeadsFromCrm = async (crmIntegration, options = {}) => {
+export const importLeadsFromCrm = async (tenantConnection, crmIntegration, options = {}) => {
   try {
+    const { Lead } = getTenantModels(tenantConnection);
+    
     // Check if tokens need refresh
     if (crmIntegration.needsTokenRefresh()) {
       const refreshedTokens = await refreshAccessToken(
@@ -262,25 +275,34 @@ export const importLeadsFromCrm = async (crmIntegration, options = {}) => {
       try {
         const mappedLead = mapCrmLeadToFormat(crmLead, crmIntegration.provider);
 
-        // Check if lead already exists
+        // Check if lead already exists by email OR by originCrmId
         const existingLead = await Lead.findOne({
-          companyId: crmIntegration.companyId,
-          email: mappedLead.email,
+          $or: [
+            { email: mappedLead.email },
+            { originCrmId: mappedLead.crmId }
+          ]
         });
 
         if (existingLead) {
-          // Update existing lead
-          Object.assign(existingLead, mappedLead);
-          existingLead.lastSyncedAt = new Date();
-          await existingLead.save();
-          results.updated += 1;
+          // Update existing lead only if it's not a platform-originated lead
+          if (existingLead.leadOrigin !== "platform" || !existingLead.crmId) {
+            Object.assign(existingLead, mappedLead);
+            existingLead.lastSyncedAt = new Date();
+            await existingLead.save();
+            results.updated += 1;
+          } else {
+            // Skip leads that originated from platform (already synced to CRM)
+            results.skipped += 1;
+          }
         } else {
-          // Create new lead
+          // Create new lead from CRM
           await Lead.create({
             ...mappedLead,
-            companyId: crmIntegration.companyId,
             crmSyncStatus: "synced",
             lastSyncedAt: new Date(),
+            leadOrigin: "crm",
+            originCrmProvider: crmIntegration.provider,
+            originCrmId: mappedLead.crmId,
           });
           results.imported += 1;
         }
@@ -305,10 +327,8 @@ export const importLeadsFromCrm = async (crmIntegration, options = {}) => {
  * Map lead data to CRM format
  */
 const mapLeadToCrmFormat = (lead, crmIntegration) => {
-  const mapping = crmIntegration.settings.fieldMapping.leadFields;
-
   const mapped = {
-    name: lead.name,
+    name: lead.fullName || lead.name,
     firstName: lead.firstName,
     lastName: lead.lastName,
     email: lead.email,
@@ -424,20 +444,15 @@ export const getSyncStatus = async (companyId) => {
     };
   }
 
-  // Get lead sync stats
-  const totalLeads = await Lead.countDocuments({ companyId });
-  const syncedLeads = await Lead.countDocuments({
-    companyId,
-    crmSyncStatus: "synced",
-  });
-  const pendingLeads = await Lead.countDocuments({
-    companyId,
-    crmSyncStatus: { $in: ["pending", null] },
-  });
-  const failedLeads = await Lead.countDocuments({
-    companyId,
-    crmSyncStatus: "failed",
-  });
+  // Get tenant connection
+  const tenantConnection = await getTenantConnection(companyId.toString());
+  const { Lead } = getTenantModels(tenantConnection);
+
+  // Get lead sync stats (no companyId filter needed!)
+  const totalLeads = await Lead.countDocuments({});
+  const syncedLeads = await Lead.countDocuments({ crmSyncStatus: "synced" });
+  const pendingLeads = await Lead.countDocuments({ crmSyncStatus: { $in: ["pending", null] } });
+  const failedLeads = await Lead.countDocuments({ crmSyncStatus: "failed" });
 
   return {
     hasIntegration: true,
@@ -470,14 +485,15 @@ export const retryFailedSyncs = async (companyId) => {
     throw new Error("No active CRM integration found");
   }
 
+  // Get tenant connection
+  const tenantConnection = await getTenantConnection(companyId.toString());
+  const { Lead } = getTenantModels(tenantConnection);
+
   // Get failed leads
-  const failedLeads = await Lead.find({
-    companyId,
-    crmSyncStatus: "failed",
-  });
+  const failedLeads = await Lead.find({ crmSyncStatus: "failed" });
 
   const leadIds = failedLeads.map((lead) => lead._id);
 
   // Retry sync
-  return await syncLeadsToCrm(leadIds, crmIntegration);
+  return await syncLeadsToCrm(tenantConnection, leadIds, crmIntegration);
 };

@@ -1,7 +1,4 @@
-import { NextBestAction } from "../models/nextBestAction.model.js";
-import { DealHealth } from "../models/dealHealth.model.js";
-import { Lead } from "../models/lead.model.js";
-import { EngagementHistory } from "../models/engagementHistory.model.js";
+import { getTenantModels } from "../models/index.js";
 import OpenAI from "openai";
 
 class NextBestActionService {
@@ -15,13 +12,15 @@ class NextBestActionService {
   /**
    * Generate next best action for a lead
    */
-  async generateNextBestAction(companyId, leadId) {
+  async generateNextBestAction(tenantConnection, leadId) {
     try {
+      const { Lead, DealHealth, EngagementHistory, NextBestAction } = getTenantModels(tenantConnection);
+      
       // Fetch lead and related data
       const lead = await Lead.findById(leadId);
       if (!lead) throw new Error("Lead not found");
 
-      const dealHealth = await DealHealth.findOne({ companyId, leadId });
+      const dealHealth = await DealHealth.findOne({ leadId });
       if (!dealHealth) throw new Error("Deal health data not found");
 
       const engagements = await EngagementHistory.find({ leadId })
@@ -38,8 +37,7 @@ class NextBestActionService {
       const aiReasoning = await this.generateAIReasoning(leadContext, action);
 
       // Create the next best action record
-      const nextAction = new NextBestAction({
-        companyId,
+      const nextAction = await NextBestAction.create({
         leadId,
         dealHealthId: dealHealth._id,
         actionType: action.type,
@@ -63,7 +61,6 @@ class NextBestActionService {
         expiresAt: this.calculateExpiryDate(action.timing),
       });
 
-      await nextAction.save();
       console.log(`[NBA] Generated action ${nextAction._id} for lead ${leadId}`);
 
       return nextAction;
@@ -468,8 +465,10 @@ Only JSON, no additional text.
   /**
    * Execute an action
    */
-  async executeAction(companyId, actionId, executedBy, details = {}) {
+  async executeAction(tenantConnection, actionId, executedBy, details = {}) {
     try {
+      const { NextBestAction } = getTenantModels(tenantConnection);
+      
       const action = await NextBestAction.findById(actionId);
       if (!action) throw new Error("Action not found");
 
@@ -507,8 +506,10 @@ Only JSON, no additional text.
   /**
    * Snooze an action
    */
-  async snoozeAction(actionId, days = 3) {
+  async snoozeAction(tenantConnection, actionId, days = 3) {
     try {
+      const { NextBestAction } = getTenantModels(tenantConnection);
+      
       const action = await NextBestAction.findById(actionId);
       if (!action) throw new Error("Action not found");
 
@@ -531,8 +532,10 @@ Only JSON, no additional text.
   /**
    * Decline an action
    */
-  async declineAction(actionId, reason = "") {
+  async declineAction(tenantConnection, actionId, reason = "") {
     try {
+      const { NextBestAction } = getTenantModels(tenantConnection);
+      
       const action = await NextBestAction.findById(actionId);
       if (!action) throw new Error("Action not found");
 
@@ -552,10 +555,11 @@ Only JSON, no additional text.
   /**
    * Get active actions for a lead
    */
-  async getActiveActions(companyId, leadId) {
+  async getActiveActions(tenantConnection, leadId) {
     try {
+      const { NextBestAction } = getTenantModels(tenantConnection);
+      
       const actions = await NextBestAction.find({
-        companyId,
         leadId,
         isActive: true,
         status: { $in: ["suggested", "accepted"] },
@@ -572,10 +576,11 @@ Only JSON, no additional text.
   /**
    * Get pending actions for company dashboard
    */
-  async getPendingActions(companyId, limit = 20) {
+  async getPendingActions(tenantConnection, limit = 20) {
     try {
+      const { NextBestAction } = getTenantModels(tenantConnection);
+      
       const actions = await NextBestAction.find({
-        companyId,
         status: { $in: ["suggested", "accepted"] },
         isActive: true,
         expiresAt: { $gt: new Date() },
@@ -594,17 +599,15 @@ Only JSON, no additional text.
   /**
    * Batch generate actions for all leads
    */
-  async batchGenerateActions(companyId, leadIds = null) {
+  async batchGenerateActions(tenantConnection, leadIds = null) {
     try {
+      const { Lead } = getTenantModels(tenantConnection);
       let leads;
 
       if (leadIds && Array.isArray(leadIds)) {
-        leads = await Lead.find({
-          companyId,
-          _id: { $in: leadIds },
-        });
+        leads = await Lead.find({ _id: { $in: leadIds } });
       } else {
-        leads = await Lead.find({ companyId });
+        leads = await Lead.find({});
       }
 
       console.log(`[NBA] Batch generating actions for ${leads.length} leads`);
@@ -613,9 +616,9 @@ Only JSON, no additional text.
 
       for (const lead of leads) {
         try {
-          await this.generateNextBestAction(companyId, lead._id);
+          await this.generateNextBestAction(tenantConnection, lead._id);
           successCount++;
-          await this.delay(500); // Rate limiting
+          await this.delay(500);
         } catch (error) {
           console.error(
             `[NBA] Failed to generate action for lead ${lead._id}:`,

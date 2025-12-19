@@ -1,4 +1,5 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { getTenantConnection } from "../db/tenantConnection.js";
 import { CrmIntegration } from "../models/crmIntegration.model.js";
 import { Company } from "../models/company.model.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -197,7 +198,7 @@ const handleOAuthCallback = asyncHandler(async (req, res) => {
     // Create CRM integration
     const crmIntegration = await CrmIntegration.create({
       companyId,
-      provider:crmProvider,
+      provider: crmProvider,
       status: "active",
       credentials,
       tokens: {
@@ -478,7 +479,10 @@ const syncLeadsToCrm = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Active CRM integration not found");
   }
 
-  const results = await syncLeadsService(leadIds, crmIntegration);
+  // Get tenant connection
+  const tenantConnection = await getTenantConnection(req.company._id.toString());
+
+  const results = await syncLeadsService(tenantConnection, leadIds, crmIntegration);
 
   return res
     .status(200)
@@ -495,7 +499,10 @@ const importFromCrm = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Active CRM integration not found");
   }
 
-  const results = await importLeadsFromCrm(crmIntegration, req.query);
+  // Get tenant connection
+  const tenantConnection = await getTenantConnection(req.company._id.toString());
+
+  const results = await importLeadsFromCrm(tenantConnection, crmIntegration, req.query);
 
   return res
     .status(200)
@@ -603,6 +610,285 @@ const resolveCrmError = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, null, "Error marked as resolved"));
 });
 
+/**
+ * Get leads from connected CRM
+ * @route GET /api/v1/crm-integration/leads
+ */
+const getLeadsFromCrm = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50, search } = req.query;
+
+  const crmIntegration = await CrmIntegration.findOne({
+    companyId: req.company._id,
+    status: "active",
+  });
+
+  if (!crmIntegration) {
+    throw new ApiError(404, "Active CRM integration not found");
+  }
+
+  // Check if tokens need refresh
+  if (crmIntegration.needsTokenRefresh()) {
+    try {
+      const refreshedTokens = await refreshAccessToken(
+        crmIntegration.provider,
+        crmIntegration.tokens.refreshToken
+      );
+
+      crmIntegration.tokens.accessToken = refreshedTokens.accessToken;
+      crmIntegration.tokens.tokenExpiry = calculateTokenExpiry(
+        refreshedTokens.expiresIn
+      );
+      await crmIntegration.save();
+    } catch (error) {
+      crmIntegration.status = "error";
+      await crmIntegration.save();
+      throw new ApiError(400, "Token refresh failed. Please reconnect.");
+    }
+  }
+
+  // Get CRM API handler
+  const crmApi = getCrmApi(crmIntegration.provider);
+  if (!crmApi) {
+    throw new ApiError(400, `Unsupported CRM provider: ${crmIntegration.provider}`);
+  }
+
+  // Fetch leads from CRM based on provider
+  let crmLeads = [];
+  let totalCount = 0;
+  const accessToken = crmIntegration.tokens.accessToken;
+
+  try {
+    switch (crmIntegration.provider) {
+      case "hubspot": {
+        const options = {
+          limit: parseInt(limit),
+          after: (parseInt(page) - 1) * parseInt(limit),
+        };
+
+        const response = await crmApi.getContacts(accessToken, options);
+        crmLeads = response.results || [];
+        totalCount = response.total || crmLeads.length;
+
+        // Transform HubSpot contacts to standard format
+        crmLeads = crmLeads.map((contact) => ({
+          id: contact.id,
+          crmId: contact.id,
+          firstName: contact.properties?.firstname || "",
+          lastName: contact.properties?.lastname || "",
+          fullName: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""}`.trim(),
+          email: contact.properties?.email || "",
+          phone: contact.properties?.phone || "",
+          company: contact.properties?.company || "",
+          jobTitle: contact.properties?.jobtitle || "",
+          source: "HubSpot CRM",
+          status: contact.properties?.hs_lead_status?.toLowerCase() || "new",
+          createdAt: contact.createdAt,
+          updatedAt: contact.updatedAt,
+          crmLink: `https://app.hubspot.com/contacts/${crmIntegration.credentials.portalId || crmIntegration.accountInfo?.accountId}/contact/${contact.id}`,
+        }));
+        break;
+      }
+
+      case "salesforce": {
+        const options = {
+          limit: parseInt(limit),
+          offset: (parseInt(page) - 1) * parseInt(limit),
+        };
+
+        const response = await crmApi.getLeads(
+          accessToken,
+          crmIntegration.credentials.instanceUrl,
+          options
+        );
+        crmLeads = response.records || [];
+        totalCount = response.totalSize || crmLeads.length;
+
+        // Transform Salesforce leads to standard format
+        crmLeads = crmLeads.map((lead) => ({
+          id: lead.Id,
+          crmId: lead.Id,
+          firstName: lead.FirstName || "",
+          lastName: lead.LastName || "",
+          fullName: `${lead.FirstName || ""} ${lead.LastName || ""}`.trim(),
+          email: lead.Email || "",
+          phone: lead.Phone || "",
+          company: lead.Company || "",
+          jobTitle: lead.Title || "",
+          source: "Salesforce CRM",
+          status: lead.Status?.toLowerCase() || "new",
+          createdAt: lead.CreatedDate,
+          updatedAt: lead.LastModifiedDate,
+          crmLink: `${crmIntegration.credentials.instanceUrl}/${lead.Id}`,
+        }));
+        break;
+      }
+
+      case "zoho": {
+        const options = {
+          page: parseInt(page),
+          perPage: parseInt(limit),
+        };
+
+        const response = await crmApi.getLeads(
+          accessToken,
+          crmIntegration.credentials.apiDomain,
+          options
+        );
+        crmLeads = response.data || [];
+        totalCount = response.info?.count || crmLeads.length;
+
+        // Transform Zoho leads to standard format
+        crmLeads = crmLeads.map((lead) => ({
+          id: lead.id,
+          crmId: lead.id,
+          firstName: lead.First_Name || "",
+          lastName: lead.Last_Name || "",
+          fullName: `${lead.First_Name || ""} ${lead.Last_Name || ""}`.trim(),
+          email: lead.Email || "",
+          phone: lead.Phone || "",
+          company: lead.Company || "",
+          jobTitle: lead.Title || "",
+          source: "Zoho CRM",
+          status: lead.Lead_Status?.toLowerCase() || "new",
+          createdAt: lead.Created_Time,
+          updatedAt: lead.Modified_Time,
+          crmLink: `https://crm.zoho.com/crm/EntityInfo?module=Leads&id=${lead.id}`,
+        }));
+        break;
+      }
+
+      default:
+        throw new ApiError(400, `Provider ${crmIntegration.provider} not supported for lead fetching`);
+    }
+
+    // Apply search filter if provided
+    if (search && search.trim()) {
+      const searchLower = search.trim().toLowerCase();
+      crmLeads = crmLeads.filter(
+        (lead) =>
+          lead.fullName?.toLowerCase().includes(searchLower) ||
+          lead.email?.toLowerCase().includes(searchLower) ||
+          lead.company?.toLowerCase().includes(searchLower)
+      );
+      totalCount = crmLeads.length;
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          leads: crmLeads,
+          totalResults: totalCount,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          provider: crmIntegration.provider,
+        },
+        "CRM leads fetched successfully"
+      )
+    );
+  } catch (error) {
+    console.error("Error fetching CRM leads:", error);
+    throw new ApiError(500, `Failed to fetch leads from ${crmIntegration.provider}: ${error.message}`);
+  }
+});
+
+/**
+ * Get combined leads (internal + CRM)
+ * @route GET /api/v1/crm-integration/leads/combined
+ */
+const getCombinedLeads = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20 } = req.query;
+
+  // Get tenant connection
+  const tenantConnection = await getTenantConnection(req.company._id.toString());
+  const { Lead } = getTenantModels(tenantConnection);
+
+  // Get internal leads
+  const internalLeads = await Lead.find({})
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit) / 2)
+    .populate("formId", "name status formType")
+    .lean();
+
+  // Transform internal leads
+  const transformedInternalLeads = internalLeads.map((lead) => ({
+    ...lead,
+    source: lead.source || "Internal",
+    sourceType: "internal",
+  }));
+
+  // Get CRM leads
+  let crmLeads = [];
+  const crmIntegration = await CrmIntegration.findOne({
+    companyId: req.company._id,
+    status: "active",
+  });
+
+  if (crmIntegration) {
+    try {
+      // Refresh tokens if needed
+      if (crmIntegration.needsTokenRefresh()) {
+        const refreshedTokens = await refreshAccessToken(
+          crmIntegration.provider,
+          crmIntegration.tokens.refreshToken
+        );
+        crmIntegration.tokens.accessToken = refreshedTokens.accessToken;
+        crmIntegration.tokens.tokenExpiry = calculateTokenExpiry(refreshedTokens.expiresIn);
+        await crmIntegration.save();
+      }
+
+      const crmApi = getCrmApi(crmIntegration.provider);
+      if (crmApi) {
+        const accessToken = crmIntegration.tokens.accessToken;
+
+        switch (crmIntegration.provider) {
+          case "hubspot": {
+            const response = await crmApi.getContacts(accessToken, { limit: parseInt(limit) / 2 });
+            crmLeads = (response.results || []).map((contact) => ({
+              id: contact.id,
+              crmId: contact.id,
+              fullName: `${contact.properties?.firstname || ""} ${contact.properties?.lastname || ""}`.trim(),
+              email: contact.properties?.email || "",
+              company: contact.properties?.company || "",
+              phone: contact.properties?.phone || "",
+              source: "HubSpot",
+              sourceType: "crm",
+              status: contact.properties?.hs_lead_status?.toLowerCase() || "new",
+              createdAt: contact.createdAt,
+              crmLink: `https://app.hubspot.com/contacts/${crmIntegration.accountInfo?.accountId}/contact/${contact.id}`,
+            }));
+            break;
+          }
+          // Add other CRM providers as needed
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to fetch CRM leads for combined view:", error.message);
+    }
+  }
+
+  // Combine and sort by createdAt
+  const combinedLeads = [...transformedInternalLeads, ...crmLeads]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, parseInt(limit));
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        leads: combinedLeads,
+        totalResults: combinedLeads.length,
+        internalCount: transformedInternalLeads.length,
+        crmCount: crmLeads.length,
+        page: parseInt(page),
+        limit: parseInt(limit),
+      },
+      "Combined leads fetched successfully"
+    )
+  );
+});
+
 export {
   getProviders,
   initOAuthFlow,
@@ -619,4 +905,6 @@ export {
   updateFieldMapping,
   getCrmErrorLogs,
   resolveCrmError,
+  getLeadsFromCrm,
+  getCombinedLeads,
 };

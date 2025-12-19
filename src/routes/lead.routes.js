@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { injectTenantConnection } from "../middlewares/tenant.middleware.js";
 import {
   getLeads,
   getLeadById,
@@ -15,6 +16,7 @@ import {
   scheduleFollowUpLeads,
   createLeadFollowup,
   exportLeadsExcel,
+  syncCrmLeads,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -27,9 +29,13 @@ const router = Router();
 router.route("/:id").patch(updateLeadById);
 
 // ================================================
-// Protected routes - Require authentication
+// Protected routes - Require authentication + tenant context
 // ================================================
-router.use(verifyJWT);
+router.use(verifyJWT, injectTenantConnection);
+
+// Sync/Import CRM leads to database
+// POST /api/v1/lead/sync-crm
+router.route("/sync-crm").post(syncCrmLeads);
 
 // Get all leads with pagination, filtering, and sorting
 // GET /api/v1/lead/all?page=1&limit=10&status=hot&industry=Technology

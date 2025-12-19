@@ -133,6 +133,7 @@ export const zohoApi = {
    */
   getLeads: async (accessToken, apiDomain, options = {}) => {
     const params = new URLSearchParams({
+      fields: "First_Name,Last_Name,Email,Phone,Company,Title,Lead_Status,Lead_Source,Description,Created_Time,Modified_Time",
       page: options.page || 1,
       per_page: options.perPage || 200,
       sort_by: options.sortBy || "Modified_Time",
@@ -301,14 +302,35 @@ export const hubspotApi = {
   getContacts: async (accessToken, options = {}) => {
     const limit = options.limit || 100;
     const after = options.after || "";
+    
+    // Request specific properties
+    const properties = [
+      'firstname',
+      'lastname',
+      'email',
+      'phone',
+      'mobilephone',
+      'company',
+      'jobtitle',
+      'hs_lead_status',
+      'lifecyclestage',
+      'createdate',
+      'lastmodifieddate'
+    ];
 
     const params = new URLSearchParams({
-      limit,
-      ...(after && { after }),
+      limit: limit.toString(),
+      properties: properties.join(','),
+      ...(after && { after: after.toString() }),
     });
 
     const url = `${CRM_API_URLS.hubspot.base}${CRM_API_URLS.hubspot.contacts}?${params}`;
-    return await makeApiRequest(url, {}, accessToken);
+    console.log(`[HubSpot API] Fetching contacts from:`, url);
+    
+    const response = await makeApiRequest(url, {}, accessToken);
+    console.log(`[HubSpot API] Response total:`, response.results?.length || 0);
+    
+    return response;
   },
 
   /**

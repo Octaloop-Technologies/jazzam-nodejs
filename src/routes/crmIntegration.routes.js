@@ -15,6 +15,8 @@ import {
   updateFieldMapping,
   getCrmErrorLogs,
   resolveCrmError,
+  getLeadsFromCrm,
+  getCombinedLeads,
 } from "../controllers/crmIntegration.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -74,5 +76,10 @@ router.route("/error-logs").get(getCrmErrorLogs);
 
 // PATCH /api/v1/crm-integration/error-logs/:errorId/resolve (Resolve error)
 router.route("/error-logs/:errorId/resolve").patch(resolveCrmError);
+
+// GET /api/v1/crm-integration/error-logs (Get error logs)
+router.get("/leads", getLeadsFromCrm);
+// GET /api/v1/crm-integration/error-logs (Get error logs)
+router.get("/leads/combined", getCombinedLeads);
 
 export default router;

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { injectTenantConnection } from "../middlewares/tenant.middleware.js";
 import {
   generateAction,
   getLeadAction,
@@ -14,8 +15,8 @@ import {
 
 const router = Router();
 
-// All routes require authentication
-router.use(verifyJWT);
+// All routes require authentication and tenant context
+router.use(verifyJWT, injectTenantConnection);
 
 // Get pending actions for company dashboard
 // GET /api/v1/next-best-action/pending
