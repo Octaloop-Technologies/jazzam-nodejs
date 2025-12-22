@@ -5,6 +5,8 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import passport from "./config/passport.js";
 import helmet from "helmet";
+import fs from "fs";
+import path from "path";
 import {
   corsOptions,
   generalRateLimit,
@@ -123,6 +125,44 @@ cron.schedule("0 2 * * *", async () => {
     }
   } catch (error) {
     console.error("❌ Health recalculation failed:", error);
+  }
+}, {
+  timezone: "Asia/Riyadh"
+});
+
+// Daily cleanup of old proposal files at 3 AM
+cron.schedule("0 3 * * *", async () => {
+  console.log("🧹 Running daily proposal file cleanup:", new Date().toISOString());
+  try {
+    const tempDir = path.join(process.cwd(), 'public', 'temp');
+    if (!fs.existsSync(tempDir)) {
+      console.log("📁 Temp directory does not exist, skipping cleanup");
+      return;
+    }
+
+    const files = fs.readdirSync(tempDir);
+    const now = Date.now();
+    const twoDaysMs = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
+    let deletedCount = 0;
+
+    for (const file of files) {
+      // Only clean up proposal files
+      if (!file.startsWith('proposal_') || !file.endsWith('.docx')) continue;
+
+      const filePath = path.join(tempDir, file);
+      const stats = fs.statSync(filePath);
+      const fileAge = now - stats.mtime.getTime();
+
+      if (fileAge > twoDaysMs) {
+        fs.unlinkSync(filePath);
+        deletedCount++;
+        console.log(`🗑️ Deleted old proposal file: ${file}`);
+      }
+    }
+
+    console.log(`🧹 Cleaned up ${deletedCount} old proposal files`);
+  } catch (error) {
+    console.error("❌ File cleanup failed:", error);
   }
 }, {
   timezone: "Asia/Riyadh"
@@ -256,6 +296,7 @@ import ServicesRouter from "./routes/services.routes.js";
 import { engagementHistorySchema } from "./models/engagementHistory.model.js";
 import dealHealthService from "./services/dealHealth.service.js";
 import checkReplies from "./utils/check-inbound-replies.js";
+import proposalRouter from "./routes/proposal.routes.js";
 import nextBestActionRoutes from "./routes/nextBestAction.routes.js";
 import { Company } from "./models/company.model.js";
 import nextBestActionService from "./services/nextBestAction.service.js";
@@ -283,6 +324,7 @@ app.use("/api/v1/notifications", notificationsRoute);
 app.use("/api/v1/deal-health", dealHealthRouter);
 app.use("/api/v1/services", ServicesRouter);
 app.use("/api/v1/next-best-action", nextBestActionRoutes);
+app.use("/api/v1/proposals", proposalRouter);
 app.get("/api/email/track/open/:token", async (req, res) => {
   try {
     const { token } = req.params;
