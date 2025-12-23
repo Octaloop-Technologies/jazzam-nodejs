@@ -377,7 +377,7 @@ const getLeads = asyncHandler(async (req, res) => {
     source,
     sortBy = "createdAt",
     sortOrder = "desc",
-    includeCrmLeads = "true", // New parameter to control CRM inclusion
+    includeCrmLeads = "true",
   } = req.query;
 
   // Get tenant-specific models
@@ -391,6 +391,11 @@ const getLeads = asyncHandler(async (req, res) => {
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (companySize) matchConditions.companySize = companySize;
   if (source) matchConditions.source = source;
+
+  // If user type is "user", only show leads assigned to them
+  // if (req.company.userType === "user") {
+  //   matchConditions.assignedTo = req.company._id;
+  // }
 
   // Build sort object
   const sortObj = {};
@@ -429,9 +434,19 @@ const getLeads = asyncHandler(async (req, res) => {
       },
     },
     {
+      $lookup: {
+        from: "companies",
+        localField: "assignedTo",
+        foreignField: "_id",
+        as: "assignedUser",
+        pipeline: [{ $project: { fullName: 1, email: 1, userType: 1 } }],
+      },
+    },
+    {
       $addFields: {
         form: { $arrayElemAt: ["$form", 0] },
         dealHealth: { $arrayElemAt: ["$dealHealth", 0] },
+        assignedUser: { $arrayElemAt: ["$assignedUser", 0] },
         // For backward compatibility: use platformUrl if profileUrl doesn't exist
         profileUrl: {
           $ifNull: ["$profileUrl", "$platformUrl"],
@@ -498,6 +513,15 @@ const getLeadById = asyncHandler(async (req, res) => {
       leadData.profileUrl = leadData.platformUrl;
     }
 
+    // Populate assigned user
+    if (leadData.assignedTo) {
+      const assignedUser = await mongoose.connection.db.collection('companies').findOne(
+        { _id: leadData.assignedTo },
+        { projection: { fullName: 1, email: 1, userType: 1 } }
+      );
+      leadData.assignedUser = assignedUser;
+    }
+
     // Lead deal health and score
     const dealHealth = await DealHealth.findOne({ leadId: id }, {
       engagementMetrics: 1, velocityMetrics: 1, leadId: 1,
@@ -525,7 +549,7 @@ const getLeadById = asyncHandler(async (req, res) => {
 // Update lead by ID
 const updateLeadById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, notes, tags, leadScore, qualificationScore, bant } = req.body;
+  const { status, notes, tags, leadScore, qualificationScore, bant, assignedTo } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(400, "Invalid lead ID");
@@ -549,6 +573,16 @@ const updateLeadById = asyncHandler(async (req, res) => {
         ...updateFields.bant,
         ...bant,
       };
+    }
+    if (assignedTo !== undefined) {
+      // Validate that assignedTo is a team member if assigning
+      if (assignedTo && req.companyDoc.teamMembers.some(member => member.company.toString() === assignedTo.toString())) {
+        updateFields.assignedTo = assignedTo;
+      } else if (assignedTo) {
+        throw new ApiError(400, "Assigned user must be a team member of the company");
+      } else {
+        updateFields.assignedTo = null; // Unassign
+      }
     }
 
     const updatedLead = await Lead.findByIdAndUpdate(
@@ -612,6 +646,11 @@ const searchLeads = asyncHandler(async (req, res) => {
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (source) matchConditions.source = source;
 
+  // If user type is "user", only show leads assigned to them
+  if (req.company.userType === "user") {
+    matchConditions.assignedTo = req.company._id;
+  }
+
   // Build sort object
   const sortObj = {};
   sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
@@ -634,8 +673,18 @@ const searchLeads = asyncHandler(async (req, res) => {
       },
     },
     {
+      $lookup: {
+        from: "companies",
+        localField: "assignedTo",
+        foreignField: "_id",
+        as: "assignedUser",
+        pipeline: [{ $project: { fullName: 1, email: 1, userType: 1 } }],
+      },
+    },
+    {
       $addFields: {
         form: { $arrayElemAt: ["$form", 0] },
+        assignedUser: { $arrayElemAt: ["$assignedUser", 0] },
         searchScore: { $meta: "textScore" },
         // For backward compatibility: use platformUrl if profileUrl doesn't exist
         profileUrl: {
@@ -1317,6 +1366,26 @@ const batchQualifyLeadsBANT = asyncHandler(async (req, res) => {
   }
 });
 
+// Get assignable team members for leads
+const getAssignableUsers = asyncHandler(async (req, res) => {
+  try {
+    // Get team members from company document
+    const teamMembers = req.companyDoc.teamMembers.map(member => member.company);
+
+    // Fetch user details from system DB
+    const assignableUsers = await Company.find({
+      _id: { $in: teamMembers },
+      userType: "user"
+    }).select("fullName email _id");
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, assignableUsers, "Assignable users fetched successfully"));
+  } catch (error) {
+    throw new ApiError(500, error.message || "Failed to fetch assignable users");
+  }
+});
+
 // ==============================================================
 // Helper Functions
 // ==============================================================
@@ -1337,5 +1406,6 @@ export {
   scheduledLeads,
   createLeadFollowup,
   exportLeadsExcel,
-  syncCrmLeads
+  syncCrmLeads,
+  getAssignableUsers
 };

@@ -142,16 +142,21 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
 
     if (!company) return res.status(404).json({ message: "Company not found" });
 
+    // Get tenant-specific models for Lead and FollowUp
+    const tenantId = companyId.toString();
+    const tenantConnection = await getTenantConnection(tenantId);
+    const { Lead, FollowUp } = getTenantModels(tenantConnection);
+
     // Dashboard stats
-    const totalLeads = await Lead.countDocuments({ companyId: company._id });
+    // Note: No need to filter by companyId since each tenant has isolated database
+    const totalLeads = await Lead.countDocuments({});
 
     // new: counts by status
-    const hotLeads = await Lead.countDocuments({ companyId: company._id, status: "hot" });
-    const warmLeads = await Lead.countDocuments({ companyId: company._id, status: "warm" });
-    const coldLeads = await Lead.countDocuments({ companyId: company._id, status: "cold" });
+    const hotLeads = await Lead.countDocuments({ status: "hot" });
+    const warmLeads = await Lead.countDocuments({ status: "warm" });
+    const coldLeads = await Lead.countDocuments({ status: "cold" });
 
     const qualifiedLeads = await Lead.countDocuments({
-      companyId: company._id,
       $or: [
         { status: "qualified" },
         { "bant.totalScore": { $gte: 60 } },
@@ -161,19 +166,16 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
     });
 
     const leadFollowUpsSent = await Lead.countDocuments({
-      companyId: company._id,
       "emailStatus.followUpSent": true,
     });
 
     const followUpRecordsSubmitted = await FollowUp.countDocuments({
-      companyId: company._id,
       status: "submitted",
     });
 
     const followUpsSent = leadFollowUpsSent + followUpRecordsSubmitted;
 
     const convertedLeads = await Lead.countDocuments({
-      companyId: company._id,
       "conversionData.converted": true,
     });
 
@@ -206,7 +208,6 @@ const getCompanyDashboard = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Error while calling function for get dashboard");
   }
 })
-// ...existing code...
 
 const registerCompany = asyncHandler(async (req, res) => {
   const { email, password, confirmPassword, userType } = req.body;

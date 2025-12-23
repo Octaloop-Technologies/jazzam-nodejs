@@ -17,6 +17,7 @@ import {
   createLeadFollowup,
   exportLeadsExcel,
   syncCrmLeads,
+  getAssignableUsers,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -89,6 +90,10 @@ router.route("/follow-up/:id").post(followUpEmail)
 // schedule followup lead
 // POST /api/v1/lead/scheduleFolloUpLeads
 router.route("/schedule-follow-up/:id").post(scheduleFollowUpLeads);
+
+// Get assignable team members for leads
+// GET /api/v1/lead/assignable-users
+router.route("/assignable-users").get(getAssignableUsers);
 
 // download leads in excelsheet
 // GET /api/v1/get-excel-file
