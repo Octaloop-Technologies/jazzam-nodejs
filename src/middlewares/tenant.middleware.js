@@ -1,5 +1,6 @@
 import { ApiError } from "../utils/ApiError.js";
 import { getTenantConnection } from "../db/tenantConnection.js";
+import { Company } from "../models/company.model.js";
 
 /**
  * Middleware to inject tenant database connection
@@ -10,8 +11,35 @@ export const injectTenantConnection = async (req, res, next) => {
     if (!req.company) {
       throw new ApiError(401, "Authentication required");
     }
+    let tenantId;
 
-    const tenantId = req.company._id.toString();
+    if(req.query.companyId !== undefined && req.query.companyId !== null){
+      tenantId = req.query.companyId;
+    }else if(req.company && req.company._id){
+      if (req.company.userType !== "company") {
+        throw new ApiError(403, "Users cannot access company-specific resources directly");
+      }
+      tenantId = req.company._id.toString();
+    }else{
+      throw new ApiError(400, "Authenticated company information is missing");
+    }
+
+    // Verify that the tenantId corresponds to a company (not a user)
+    const company = await Company.findById(tenantId);
+    if (!company || company.userType !== "company") {
+      throw new ApiError(403, "Invalid tenant access - only companies can have tenant databases");
+    }
+
+    // Attach company document for further validation
+    req.companyDoc = company;
+
+    // If the authenticated user is of type "user", check if they are a team member of the company
+    if (req.company.userType === "user") {
+      const isTeamMember = company.teamMembers.some(member => member.company.toString() === req.company._id.toString());
+      if (!isTeamMember) {
+        throw new ApiError(403, "User is not a team member of this company");
+      }
+    }
     
     // Get or create connection for this tenant
     const tenantConnection = await getTenantConnection(tenantId);

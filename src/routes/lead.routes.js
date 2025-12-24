@@ -17,6 +17,7 @@ import {
   createLeadFollowup,
   exportLeadsExcel,
   syncCrmLeads,
+  getAssignableUsers,
 } from "../controllers/lead.controller.js";
 
 const router = Router();
@@ -24,9 +25,7 @@ const router = Router();
 // ================================================
 // Public route - Create lead (for form submission)
 // ================================================
-// Update lead bant object
-// PATCH /api/v1/lead/:id
-router.route("/:id").patch(updateLeadById);
+
 
 // ================================================
 // Protected routes - Require authentication + tenant context
@@ -90,8 +89,16 @@ router.route("/follow-up/:id").post(followUpEmail)
 // POST /api/v1/lead/scheduleFolloUpLeads
 router.route("/schedule-follow-up/:id").post(scheduleFollowUpLeads);
 
+// Get assignable team members for leads
+// GET /api/v1/lead/assignable-users
+router.route("/assignable-users").get(getAssignableUsers);
+
 // download leads in excelsheet
 // GET /api/v1/get-excel-file
 router.route("/get-excel-file/:id").get(exportLeadsExcel)
+
+// Update lead bant object
+// PATCH /api/v1/leads/:id
+router.route("/:id").patch(updateLeadById);
 
 export default router;
