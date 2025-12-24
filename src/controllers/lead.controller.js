@@ -393,9 +393,9 @@ const getLeads = asyncHandler(async (req, res) => {
   if (source) matchConditions.source = source;
 
   // If user type is "user", only show leads assigned to them
-  // if (req.company.userType === "user") {
-  //   matchConditions.assignedTo = req.company._id;
-  // }
+  if (req.company.userType === "user") {
+    matchConditions.assignedTo = req.company._id;
+  }
 
   // Build sort object
   const sortObj = {};
@@ -595,6 +595,7 @@ const updateLeadById = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Lead not found");
     }
 
+    // Real-time notifications
     if (status === "qualified") {
       // Create and emit real-time notification
       const newNotification = await Notification.create({
@@ -604,6 +605,29 @@ const updateLeadById = asyncHandler(async (req, res) => {
       });
       req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
       console.log(`🔔 Real-time notification sent for company`);
+    }
+
+    // Notification for lead assignment
+    if (assignedTo) {
+      const assignmentNotification = await Notification.create({
+        companyId: req.company._id,
+        title: "Lead Assigned",
+        message: `A lead ${updatedLead?.fullName} has been assigned to you.`
+      });
+      // Emit to assigned user
+      req.io.emit(`notifications-${assignedTo}`, { action: "newNotification", notification: assignmentNotification });
+      // Also emit to company
+      req.io.emit(`notifications`, { action: "newNotification", notification: assignmentNotification });
+      console.log(`🔔 Real-time assignment notification sent to user ${assignedTo}`);
+      // Emit real-time event for new lead
+      if (req.io) {
+        req.io.to(`company_${req.company._id}`).emit("lead:new", {
+          type: "lead:new",
+          data: updatedLead,
+          timestamp: new Date().toISOString(),
+        });
+        console.log(`📡 Real-time: New lead created - ${updatedLead.fullName}`);
+      }
     }
 
     return res
@@ -756,8 +780,14 @@ const getLeadStats = asyncHandler(async (req, res) => {
     // Get tenant-specific models
     const { Lead } = getTenantModels(req.tenantConnection);
 
+    // Build base match for stats. If requester is a user, limit to their assigned leads.
+    const baseMatch = { status: { $ne: null } };
+    if (req.company && req.company.userType === "user") {
+      baseMatch.assignedTo = req.company._id;
+    }
+
     const stats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: baseMatch },
       {
         $group: {
           _id: null,
@@ -793,28 +823,28 @@ const getLeadStats = asyncHandler(async (req, res) => {
     ]);
 
     const industryStats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: baseMatch },
       { $group: { _id: "$companyIndustry", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const platformStats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: baseMatch },
       { $group: { _id: "$platform", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const locationStats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: baseMatch },
       { $group: { _id: "$location", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
     const formStats = await Lead.aggregate([
-      { $match: { status: { $ne: null } } },
+      { $match: baseMatch },
       {
         $lookup: {
           from: "forms",

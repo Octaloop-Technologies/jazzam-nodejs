@@ -25,9 +25,7 @@ const router = Router();
 // ================================================
 // Public route - Create lead (for form submission)
 // ================================================
-// Update lead bant object
-// PATCH /api/v1/lead/:id
-router.route("/:id").patch(updateLeadById);
+
 
 // ================================================
 // Protected routes - Require authentication + tenant context
@@ -98,5 +96,9 @@ router.route("/assignable-users").get(getAssignableUsers);
 // download leads in excelsheet
 // GET /api/v1/get-excel-file
 router.route("/get-excel-file/:id").get(exportLeadsExcel)
+
+// Update lead bant object
+// PATCH /api/v1/leads/:id
+router.route("/:id").patch(updateLeadById);
 
 export default router;
