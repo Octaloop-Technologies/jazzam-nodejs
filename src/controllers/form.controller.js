@@ -445,7 +445,7 @@ const submitFormData = asyncHandler(async (req, res) => {
   }
 
   // Fetch company from system DB
-  const company = await Company.findById(form.companyId);
+  const company = await Company.findById(form.companyId).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus");
   if (!company) {
     throw new ApiError(404, "Company not found");
   }
@@ -527,6 +527,30 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
+      try {
+        const webResponse = await fetch('https://hook.eu2.make.com/ora3wwlyjeodkn7o9qwf6qsowc2watv9', {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            teamMembers: company?.teamMembers,
+            records: lead,
+            source: "mongo"
+          })
+        });
+
+        // Check if the request was successful
+        if (webResponse.ok) {
+          const responseText = await webResponse.text();
+          console.log("Webhook response:", responseText);  
+        } else {
+          console.error(`Webhook failed with status: ${webResponse.status} - ${webResponse.statusText}`);
+        }
+      } catch (webhookError) {
+        console.error("Webhook error:", webhookError.message);
+      }
+
       // Emit real-time event for new lead
       if (req.io) {
         req.io.to(`company_${company._id}`).emit("lead:new", {
@@ -534,7 +558,7 @@ const submitFormData = asyncHandler(async (req, res) => {
           data: lead,
           timestamp: new Date().toISOString(),
         });
-        console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
+        // console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
       }
 
       // Always create deal health and next best action for new leads
@@ -550,7 +574,7 @@ const submitFormData = asyncHandler(async (req, res) => {
         try {
           const welcomeEmail = await emailService.sendWelcomeEmail(lead, form);
           await lead.updateEmailStatus("welcome", true);
-          console.log(`✅ Welcome email sent to lead: ${lead.email}`);
+          // console.log(`✅ Welcome email sent to lead: ${lead.email}`);
           // Log engagement only if email was sent successfully
           if (welcomeEmail.success === true) {
             await dealHealthService.logEngagement(tenantConnection, lead._id, {
