@@ -293,6 +293,7 @@ import invitationRoute from "./routes/invitation.routes.js";
 import notificationsRoute from "./routes/notification.routes.js";
 import dealHealthRouter from "./routes/dealHealth.routes.js";
 import ServicesRouter from "./routes/services.routes.js";
+import automationRouter from "./routes/automation.routes.js";
 import { engagementHistorySchema } from "./models/engagementHistory.model.js";
 import dealHealthService from "./services/dealHealth.service.js";
 import checkReplies from "./utils/check-inbound-replies.js";
@@ -325,6 +326,7 @@ app.use("/api/v1/deal-health", dealHealthRouter);
 app.use("/api/v1/services", ServicesRouter);
 app.use("/api/v1/next-best-action", nextBestActionRoutes);
 app.use("/api/v1/proposals", proposalRouter);
+app.use("/api/v1/automation", automationRouter);
 app.get("/api/email/track/open/:token", async (req, res) => {
   try {
     const { token } = req.params;

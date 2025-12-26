@@ -211,7 +211,7 @@ const leadSchema = new Schema(
     // Lead Management
     status: {
       type: String,
-      enum: ["new", "hot", "cold", "warm", "qualified"],
+      enum: ["new", "hot", "cold", "warm", "qualified", "assigned", "win", "lost"],
       default: "new",
       index: true,
     },
@@ -357,6 +357,20 @@ const leadSchema = new Schema(
         type: String,
         trim: true,
       },
+    },
+
+    // API Key for Automation (saved at lead creation time)
+    // Allows automation team to reference this specific lead
+    apiKey: {
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true,
+    },
+
+    // Lead Assignment Tracking
+    assignmentDate: {
+      type: Date,
     },
   },
   {

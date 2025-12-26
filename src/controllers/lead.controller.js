@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { getTenantModels } from "../models/index.js";
+import { Company } from "../models/company.model.js";
 import mongoose from "mongoose";
 import bantService from "../services/bant.service.js";
 import emailService from "../services/email.service.js";
@@ -1417,6 +1418,244 @@ const getAssignableUsers = asyncHandler(async (req, res) => {
 });
 
 // ==============================================================
+// Assign Lead to Team Member (For Automation Team - No JWT)
+// ==============================================================
+
+/**
+ * Assign a single lead to a team member
+ * Used by automation team via API Key authentication
+ * 
+ * Request body:
+ * {
+ *   "leadId": "lead-mongodb-id",
+ *   "assignedToUserId": "user-mongodb-id",
+ *   "notes": "optional notes for assignment"
+ * }
+ */
+const assignLeadToUser = asyncHandler(async (req, res) => {
+  try {
+    const { leadId, assignedToUserId } = req.body;
+    const companyId = req.companyId;
+
+    console.log("assignedToUserId******", companyId)
+
+    // Validation
+    if (!leadId || !mongoose.Types.ObjectId.isValid(leadId)) {
+      throw new ApiError(400, "Valid leadId is required");
+    }
+
+    if (!assignedToUserId || !mongoose.Types.ObjectId.isValid(assignedToUserId)) {
+      throw new ApiError(400, "Valid assignedToUserId is required");
+    }
+
+    // Get tenant connection for the company
+    const { getTenantConnection } = await import("../db/tenantConnection.js");
+    const tenantConnection = await getTenantConnection(companyId.toString());
+
+    // Get tenant models
+    const { Lead, Company: CompanyModel } = getTenantModels(tenantConnection);
+
+    // Verify the user being assigned is a team member of the company
+    const company = await Company.findById(companyId);
+    if (!company) {
+      throw new ApiError(404, "Company not found");
+    }
+
+    const isTeamMember = company.teamMembers?.some(
+      member => member.company.toString() === assignedToUserId.toString()
+    );
+
+    if (!isTeamMember) {
+      throw new ApiError(
+        400,
+        "Assigned user is not a team member of this company"
+      );
+    }
+
+    // Verify the user is active in system DB (Company model is in system DB only)
+    const assignedUser = await Company.findById(assignedToUserId);
+    if (!assignedUser || !assignedUser.isActive) {
+      throw new ApiError(400, "Assigned user is inactive or not found");
+    }
+
+    // Find and update the lead
+    const lead = await Lead.findByIdAndUpdate(
+      leadId,
+      {
+        assignedTo: assignedToUserId,
+        assignmentDate: new Date(),
+        status: "assigned"
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!lead) {
+      throw new ApiError(404, "Lead not found");
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          leadId: lead._id,
+          assignedTo: assignedToUserId,
+          assignmentDate: lead.assignmentDate,
+          status: lead.status
+        },
+        "Lead assigned successfully"
+      )
+    );
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(500, error.message || "Failed to assign lead");
+  }
+});
+
+/**
+ * Assign multiple leads to a team member in bulk
+ * 
+ * Request body:
+ * {
+ *   "leadIds": ["lead-id-1", "lead-id-2", "lead-id-3"],
+ *   "assignedToUserId": "user-mongodb-id",
+ *   "notes": "optional notes"
+ * }
+ */
+const assignLeadsToUserBulk = asyncHandler(async (req, res) => {
+  try {
+    const { leadIds, assignedToUserId, notes } = req.body;
+    const companyId = req.companyId;
+
+    // Validation
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      throw new ApiError(400, "leadIds must be a non-empty array");
+    }
+
+    if (!assignedToUserId || !mongoose.Types.ObjectId.isValid(assignedToUserId)) {
+      throw new ApiError(400, "Valid assignedToUserId is required");
+    }
+
+    // Validate all lead IDs
+    for (const leadId of leadIds) {
+      if (!mongoose.Types.ObjectId.isValid(leadId)) {
+        throw new ApiError(400, `Invalid lead ID format: ${leadId}`);
+      }
+    }
+
+    // Get tenant connection for the company
+    const { getTenantConnection } = await import("../db/tenantConnection.js");
+    const tenantConnection = await getTenantConnection(companyId.toString());
+
+    // Get tenant models
+    const { Lead, Company: CompanyModel } = getTenantModels(tenantConnection);
+
+    // Verify the user being assigned is a team member
+    const company = await CompanyModel.findById(companyId);
+    if (!company) {
+      throw new ApiError(404, "Company not found");
+    }
+
+    const isTeamMember = company.teamMembers?.some(
+      member => member.company.toString() === assignedToUserId.toString()
+    );
+
+    if (!isTeamMember) {
+      throw new ApiError(
+        400,
+        "Assigned user is not a team member of this company"
+      );
+    }
+
+    // Verify the user is active
+    const assignedUser = await Company.findById(assignedToUserId);
+    if (!assignedUser || !assignedUser.isActive) {
+      throw new ApiError(400, "Assigned user is inactive or not found");
+    }
+
+    // Bulk update leads
+    const updateData = {
+      assignedTo: assignedToUserId,
+      assignmentDate: new Date(),
+      status: "assigned"
+    };
+
+    if (notes) {
+      updateData.assignmentNotes = notes;
+    }
+
+    const result = await Lead.updateMany(
+      { _id: { $in: leadIds } },
+      updateData
+    );
+
+    if (result.matchedCount === 0) {
+      throw new ApiError(404, "No leads found with provided IDs");
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          totalProcessed: result.matchedCount,
+          successfullyAssigned: result.modifiedCount,
+          failedCount: result.matchedCount - result.modifiedCount,
+          assignedToUserId: assignedToUserId,
+          assignmentDate: new Date()
+        },
+        `Successfully assigned ${result.modifiedCount} leads`
+      )
+    );
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(500, error.message || "Failed to bulk assign leads");
+  }
+});
+
+/**
+ * Get team members available for lead assignment
+ * This helps the automation team know which users they can assign leads to
+ */
+const getTeamMembersForAssignment = asyncHandler(async (req, res) => {
+  try {
+    const companyId = req.companyId;
+
+    // Get the company to fetch team members
+    const company = await Company.findById(companyId);
+    if (!company) {
+      throw new ApiError(404, "Company not found");
+    }
+
+    // Get all team members
+    const teamMemberIds = company.teamMembers?.map(member => member.company) || [];
+
+    // Fetch active team member details
+    const teamMembers = await Company.find({
+      _id: { $in: teamMemberIds },
+      userType: "user",
+      isActive: true
+    }).select("_id fullName email userType");
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          totalMembers: teamMembers.length,
+          teamMembers: teamMembers.map(member => ({
+            userId: member._id,
+            fullName: member.fullName,
+            email: member.email
+          }))
+        },
+        "Team members fetched successfully"
+      )
+    );
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(500, error.message || "Failed to fetch team members");
+  }
+});
+
+// ==============================================================
 // Helper Functions
 // ==============================================================
 
@@ -1437,5 +1676,8 @@ export {
   createLeadFollowup,
   exportLeadsExcel,
   syncCrmLeads,
-  getAssignableUsers
+  getAssignableUsers,
+  assignLeadToUser,
+  assignLeadsToUserBulk,
+  getTeamMembersForAssignment
 };

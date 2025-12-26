@@ -494,6 +494,13 @@ const submitFormData = asyncHandler(async (req, res) => {
           );
       }
 
+      // STEP 1: Ensure company has an API key (generate if needed)
+      if (!company.apiKey) {
+        const apiKey = await company.generateApiKey();
+        await company.save();
+        console.log(`✅ Generated API key for company: ${company._id}`);
+      }
+
       // Create lead record from scraped data (NO companyId - separate DB!)
       const leadData = {
         formId: form._id,
@@ -523,6 +530,7 @@ const submitFormData = asyncHandler(async (req, res) => {
         source: form.formType,
         sourceUrl: form.embedUrl || null,
         status: "new",
+        apiKey: company.apiKey,
       };
 
       const lead = await Lead.create(leadData);
@@ -534,9 +542,28 @@ const submitFormData = asyncHandler(async (req, res) => {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
+            // Company & Team Info
+            company: {
+              _id: company._id,
+              name: company.companyName,
+              apiKey: company.apiKey,  // ← API Key in webhook
+            },
+            // Team Members (for auto-assignment)
             teamMembers: company?.teamMembers,
-            records: lead,
-            source: "mongo"
+            // Lead Data
+            lead: {
+              _id: lead._id,
+              fullName: lead.fullName,
+              email: lead.email,
+              company: lead.company,
+              jobTitle: lead.jobTitle,
+              phone: lead.phone,
+              platform: lead.platform,
+              platformUrl: lead.platformUrl,
+            },
+            apiKey: company.apiKey,  // ← Automation team can use this
+            source: "mongo",
+            timestamp: new Date().toISOString(),
           })
         });
 

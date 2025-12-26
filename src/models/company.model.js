@@ -286,7 +286,16 @@ const companySchema = new Schema(
     emailVerified: {
       type: Boolean,
       default: false
-    }
+    },
+
+    // API Key for automation/third-party integrations
+    apiKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -381,6 +390,24 @@ companySchema.virtual("canAddTeamMembers").get(function () {
 // Method to check available seats
 companySchema.methods.getAvailableSeats = function () {
   return this.subscriptionSeats - this.usedSeats;
+};
+
+// Method to generate a new API key for automation team
+companySchema.methods.generateApiKey = async function () {
+  const crypto = await import("crypto");
+  const apiKey = crypto.randomBytes(32).toString("hex");
+  this.apiKey = apiKey;
+  return apiKey;
+};
+
+// Method to regenerate API key (invalidates old key)
+companySchema.methods.regenerateApiKey = async function () {
+  return this.generateApiKey();
+};
+
+// Method to validate API key
+companySchema.methods.validateApiKey = function (apiKey) {
+  return this.apiKey === apiKey && this.isActive;
 };
 
 export const Company = mongoose.model("Company", companySchema);
