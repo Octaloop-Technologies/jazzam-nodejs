@@ -308,12 +308,12 @@ class EmailService {
       const emailResult = await this.#sendEmail(mailOptions);
 
       console.log(
-        `✅ Welcome email sent successfully to ${lead.email}: ${emailResult.messageId}`
+        `✅ Welcome email sent successfully to ${lead?.email}: ${emailResult.messageId}`
       );
       return {
         success: true,
         messageId: mailOptions.messageId,
-        recipient: "mudasirriaz1793@gmail.com",
+        recipient: lead?.email,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
