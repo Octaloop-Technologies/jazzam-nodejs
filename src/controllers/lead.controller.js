@@ -1439,6 +1439,10 @@ const assignLeadToUser = asyncHandler(async (req, res) => {
 
     console.log("assignedToUserId******", companyId)
 
+    console.log("leadId******", leadId)
+
+    console.log("assignedToUserId******", assignedToUserId)
+
     // Validation
     if (!leadId || !mongoose.Types.ObjectId.isValid(leadId)) {
       throw new ApiError(400, "Valid leadId is required");

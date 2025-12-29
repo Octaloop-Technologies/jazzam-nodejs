@@ -1149,7 +1149,7 @@ const updateSettings = asyncHandler(async (req, res) => {
 const companyTeamsMembers = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus");
+    const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus assignedLeadsType");
     return res.status(200).json({ success: true, message: "Team members retrieved successfully", data: company });
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -1224,7 +1224,6 @@ const getJoinedCompany = asyncHandler(async (req, res) => {
 });
 
 const changeCompanyName = asyncHandler(async (req, res) => {
-  const companyId = req.company?._id;
   try {
     const { companyName } = req.body;
     const companyId = req.company?._id;
@@ -1233,6 +1232,25 @@ const changeCompanyName = asyncHandler(async (req, res) => {
       company.companyName = companyName;
       await company.save();
       return res.status(201).json({ success: true, message: "Company name changed successfully" })
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      500,
+      error.message || "Failed to get team members"
+    );
+  }
+});
+
+const updateUserAssignLeadsType = asyncHandler(async (req, res) => {
+  try {
+    const { assignedLeadsType } = req.body;
+    const companyId = req.company?._id;
+    if (companyId) {
+      const company = await Company.findById(companyId);
+      company.assignedLeadsType = assignedLeadsType;
+      await company.save();
+      return res.status(201).json({ success: true, message: "Assigned leads type changed successfully" })
     }
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -1290,5 +1308,6 @@ export {
   updateUserType,
   verifyEmail,
   resendVerificationCode,
-  completeCompanyOnboarding
+  completeCompanyOnboarding,
+  updateUserAssignLeadsType
 };

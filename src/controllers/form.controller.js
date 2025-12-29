@@ -445,7 +445,7 @@ const submitFormData = asyncHandler(async (req, res) => {
   }
 
   // Fetch company from system DB
-  const company = await Company.findById(form.companyId).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus");
+  const company = await Company.findById(form.companyId).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus assignedLeadsType");
   if (!company) {
     throw new ApiError(404, "Company not found");
   }
