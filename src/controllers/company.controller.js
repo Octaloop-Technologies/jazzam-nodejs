@@ -1245,7 +1245,7 @@ const changeCompanyName = asyncHandler(async (req, res) => {
 const updateUserAssignLeadsType = asyncHandler(async (req, res) => {
   try {
     const { assignedLeadsType } = req.body;
-    const companyId = req.company?._id;
+    const companyId = req.params?.id;
     if (companyId) {
       const company = await Company.findById(companyId);
       company.assignedLeadsType = assignedLeadsType;

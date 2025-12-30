@@ -535,59 +535,6 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       const lead = await Lead.create(leadData);
 
-      try {
-        const webResponse = await fetch('https://hook.eu2.make.com/ora3wwlyjeodkn7o9qwf6qsowc2watv9', {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            // Company & Team Info
-            company: {
-              _id: company._id,
-              name: company.companyName,
-              apiKey: company.apiKey,  // ← API Key in webhook
-            },
-            // Team Members (for auto-assignment)
-            teamMembers: company?.teamMembers,
-            // Lead Data
-            lead: {
-              _id: lead._id,
-              fullName: lead.fullName,
-              email: lead.email,
-              company: lead.company,
-              jobTitle: lead.jobTitle,
-              phone: lead.phone,
-              platform: lead.platform,
-              platformUrl: lead.platformUrl,
-            },
-            apiKey: company.apiKey,  // ← Automation team can use this
-            source: "mongo",
-            timestamp: new Date().toISOString(),
-          })
-        });
-
-        // Check if the request was successful
-        if (webResponse.ok) {
-          const responseText = await webResponse.text();
-          console.log("Webhook response:", responseText);  
-        } else {
-          console.error(`Webhook failed with status: ${webResponse.status} - ${webResponse.statusText}`);
-        }
-      } catch (webhookError) {
-        console.error("Webhook error:", webhookError.message);
-      }
-
-      // Emit real-time event for new lead
-      if (req.io) {
-        req.io.to(`company_${company._id}`).emit("lead:new", {
-          type: "lead:new",
-          data: lead,
-          timestamp: new Date().toISOString(),
-        });
-        // console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
-      }
-
       // Always create deal health and next best action for new leads
       try {
         await dealHealthService.calculateDealHealth(tenantConnection, lead._id);
@@ -659,13 +606,72 @@ const submitFormData = asyncHandler(async (req, res) => {
         );
       }
 
+      let bantResult = null;
+
       // Apply BANT qualification if enabled in company settings (async, non-blocking)
       if (company.settings?.autoBANTQualification) {
-        qualifyLeadInBackground(lead);
+        bantResult = await qualifyLeadInBackground(lead);
       } else {
         console.log(
           `[BANT] Auto-qualification disabled for company: ${company._id}`
         );
+      }
+
+      const newLeadData = await Lead.findById(lead._id);
+
+      // Emit real-time event for new lead
+      if (req.io) {
+        req.io.to(`company_${company._id}`).emit("lead:new", {
+          type: "lead:new",
+          data: newLeadData,
+          timestamp: new Date().toISOString(),
+        });
+        // console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
+      }
+
+      try {
+        const webResponse = await fetch('https://hook.eu2.make.com/ora3wwlyjeodkn7o9qwf6qsowc2watv9', {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            // Company & Team Info
+            company: {
+              _id: company._id,
+              name: company.companyName,
+              apiKey: company.apiKey,  // ← API Key in webhook
+            },
+            // Team Members (for auto-assignment)
+            teamMembers: company?.teamMembers,
+            // Lead Data
+            lead: {
+              _id: lead._id,
+              fullName: lead.fullName,
+              email: lead.email,
+              company: lead.company,
+              jobTitle: lead.jobTitle,
+              phone: lead.phone,
+              platform: lead.platform,
+              platformUrl: lead.platformUrl,
+              leadScore: bantResult?.leadScore || lead?.leadScore || null,
+              bantCategory: bantResult?.category || lead?.bantCategory || null,
+            },
+            apiKey: company.apiKey,  // ← Automation team can use this
+            source: "mongo",
+            timestamp: new Date().toISOString(),
+          })
+        });
+
+        // Check if the request was successful
+        if (webResponse.ok) {
+          const responseText = await webResponse.text();
+          console.log("Webhook response:", responseText);
+        } else {
+          console.error(`Webhook failed with status: ${webResponse.status} - ${webResponse.statusText}`);
+        }
+      } catch (webhookError) {
+        console.error("Webhook error:", webhookError.message);
       }
 
       // Sync lead to CRM if integration is active (async, non-blocking)
@@ -707,6 +713,7 @@ const qualifyLeadInBackground = async (lead) => {
     console.log(
       `[BANT] Successfully qualified lead ${lead._id} - Score: ${bantData.score}, Category: ${bantData.category}`
     );
+    return { leadId: lead._id, leadScore: bantData.score, category: bantData.category };
   } catch (error) {
     console.error(`[BANT] Error qualifying lead ${lead._id}:`, error.message);
   }

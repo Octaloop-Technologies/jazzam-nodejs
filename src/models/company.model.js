@@ -291,7 +291,7 @@ const companySchema = new Schema(
     // Assigned leads type
     assignedLeadsType: {
       type: String,
-      enum: ["hot", "warm", "cold", "all", "qualified"],
+      enum: ["hot", "warm", "cold", "new", "qualified"],
       default: "all"
     },
 
