@@ -25,6 +25,7 @@ import {
   verifyEmail,
   resendVerificationCode,
   completeCompanyOnboarding,
+  updateUserAssignLeadsType,
 } from "../controllers/company.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -97,6 +98,9 @@ router.route("/auth/activate-member/:id").put(activateTeamMember);
 
 // Change company name
 router.route("/auth/change-name/:id").patch(changeCompanyName)
+
+// Change assigned leads type
+router.route("/auth/change-assigned-leads-type/:id").patch(updateUserAssignLeadsType)
 
 // GET /api/v1/auth/companies/:id
 router.route("/:id").get(getCompanyDashboard)

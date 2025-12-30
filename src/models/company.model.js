@@ -288,7 +288,14 @@ const companySchema = new Schema(
       default: false
     },
 
-    // API Key for automation/third-party integrations
+    // Assigned leads type
+    assignedLeadsType: {
+      type: String,
+      enum: ["hot", "warm", "cold", "new", "qualified"],
+      default: "all"
+    },
+
+
     apiKey: {
       type: String,
       unique: true,
