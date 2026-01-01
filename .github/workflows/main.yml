@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, main]
+    runs-on: [self-hosted,main]
 
     steps:
       # 1. Checkout latest code
@@ -55,7 +55,7 @@ jobs:
           sudo docker system prune -af --volumes
 
   nginx:
-    runs-on: [self-hosted, main]
+    runs-on: [self-hosted,main]
     needs: build
     steps:
       - name: Validate and Restart Nginx
