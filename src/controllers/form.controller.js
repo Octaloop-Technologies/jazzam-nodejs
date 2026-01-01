@@ -587,11 +587,11 @@ const submitFormData = asyncHandler(async (req, res) => {
           const newNotification = await Notification.create({
             companyId: company._id,
             title: "Newly Generated Lead",
-            message: `New lead created using ${form.formType} platform for ${lead.email}`
+            message: `New lead created using ${form.formType} platform`
           });
 
           // Emit notification to all connected clients of this company
-          req.io.emit(`notifications`, { action: "newNotification", notification: newNotification });
+          req.io.emit(`notifications-${company._id}`, { action: "newNotification", notification: newNotification });
           console.log(`🔔 Real-time notification sent for company`);
 
         } catch (error) {
@@ -617,17 +617,6 @@ const submitFormData = asyncHandler(async (req, res) => {
         );
       }
 
-      const newLeadData = await Lead.findById(lead._id);
-
-      // Emit real-time event for new lead
-      if (req.io) {
-        req.io.to(`company_${company._id}`).emit("lead:new", {
-          type: "lead:new",
-          data: newLeadData,
-          timestamp: new Date().toISOString(),
-        });
-        // console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
-      }
 
       try {
         const webResponse = await fetch('https://hook.eu2.make.com/ora3wwlyjeodkn7o9qwf6qsowc2watv9', {
@@ -672,6 +661,17 @@ const submitFormData = asyncHandler(async (req, res) => {
         }
       } catch (webhookError) {
         console.error("Webhook error:", webhookError.message);
+      }
+
+      const newLeadData = await Lead.findById(lead._id);
+      // Emit real-time event for new lead
+      if (req.io) {
+        req.io.to(`company_${company?._id}`).emit("lead:new", {
+          type: "lead:new",
+          data: newLeadData,
+          timestamp: new Date().toISOString(),
+        });
+        // console.log(`📡 Real-time: New lead created - ${lead.fullName}`);
       }
 
       // Sync lead to CRM if integration is active (async, non-blocking)
