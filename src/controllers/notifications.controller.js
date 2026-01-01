@@ -24,7 +24,7 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
         
         // Fetch updated notifications and emit to realtime clients
         const notifications = await Notification.find({}).sort({ createdAt: -1 });
-        if (req?.io) req.io.emit(`notifications`, { action: 'markAllRead', notifications });
+        if (req?.io) req.io.emit(`notifications-${req.company?._id}`, { action: 'markAllRead', notifications });
         return res.status(200).json({ success: true, message: 'All notifications marked as read' });
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -40,7 +40,7 @@ export const clearAll = asyncHandler(async (req, res) => {
         await Notification.deleteMany({});
         
         // Emit cleared event to realtime clients
-        if (req?.io) req.io.emit(`notifications`, { action: 'clearAll', notifications: [] });
+        if (req?.io) req.io.emit(`notifications-${req.company?._id}`, { action: 'clearAll', notifications: [] });
         return res.status(200).json({ success: true, message: 'All notifications cleared' });
     } catch (error) {
         return res.status(500).json({ error: error.message });

@@ -386,25 +386,27 @@ const getLeads = asyncHandler(async (req, res) => {
 
   // Build match conditions (NO companyId needed - separate DB per tenant!)
   const matchConditions = {};
-  if (status) matchConditions.status = status;
+  if (status && status !== "assigned") matchConditions.status = status;
   if (platform) matchConditions.platform = platform;
   if (formId) matchConditions.formId = mongoose.Types.ObjectId.createFromHexString(formId);
   if (companyIndustry) matchConditions.companyIndustry = companyIndustry;
   if (companySize) matchConditions.companySize = companySize;
   if (source) matchConditions.source = source;
 
-  // If user type is "user", only show leads assigned to them
-  if (req.company.userType === "user") {
+  
+  // If user is of type "user", only show leads assigned to them
+  if (status === "assigned" && req.company.userType === "user") {
     matchConditions.assignedTo = req.company._id;
   }
-
+  
   // Build sort object
   const sortObj = {};
   sortObj[sortBy] = sortOrder === "desc" ? -1 : 1;
-
+  
   // If CRM leads are included, we need to fetch ALL leads first, then paginate after merging
   const shouldIncludeCrm = includeCrmLeads === "true" || includeCrmLeads === true;
   
+  console.log("getLeads matchConditions:", matchConditions);
   const pipeline = [
     { $match: matchConditions },
     {
@@ -783,44 +785,63 @@ const getLeadStats = asyncHandler(async (req, res) => {
 
     // Build base match for stats. If requester is a user, limit to their assigned leads.
     const baseMatch = { status: { $ne: null } };
-    if (req.company && req.company.userType === "user") {
-      baseMatch.assignedTo = req.company._id;
+    // if (req.company && req.company.userType === "user") {
+    //   baseMatch.assignedTo = req.company._id;
+    // }
+
+    // Check if user is of type "user" to include assignedLeads count
+    const isUser = req.company && req.company.userType === "user";
+    const userId = req.company ? req.company._id : null;
+
+    // Build the aggregation pipeline dynamically
+    const groupStage = {
+      $group: {
+        _id: null,
+        totalLeads: { $sum: 1 },
+        newLeads: { $sum: { $cond: [{ $eq: ["$status", "new"] }, 1, 0] } },
+        hotLeads: {
+          $sum: { $cond: [{ $eq: ["$status", "hot"] }, 1, 0] },
+        },
+        warmLeads: {
+          $sum: { $cond: [{ $eq: ["$status", "warm"] }, 1, 0] },
+        },
+        coldLeads: {
+          $sum: { $cond: [{ $eq: ["$status", "cold"] }, 1, 0] },
+        },
+        qualifiedLeads: {
+          $sum: { $cond: [{ $eq: ["$status", "qualified"] }, 1, 0] },
+        },
+        avgLeadScore: { $avg: "$leadScore" },
+      },
+    };
+
+    // Conditionally add assignedLeads if user is of type "user"
+    if (isUser) {
+      groupStage.$group.assignedLeads = { $sum: { $cond: [{ $eq: ["$assignedTo", userId] }, 1, 0] } };
+    }
+
+    const projectStage = {
+      $project: {
+        _id: 0,
+        totalLeads: 1,
+        newLeads: 1,
+        hotLeads: 1,
+        warmLeads: 1,
+        coldLeads: 1,
+        qualifiedLeads: 1,
+        avgLeadScore: { $round: ["$avgLeadScore", 2] },
+      },
+    };
+
+    // Conditionally add assignedLeads to project
+    if (isUser) {
+      projectStage.$project.assignedLeads = 1;
     }
 
     const stats = await Lead.aggregate([
       { $match: baseMatch },
-      {
-        $group: {
-          _id: null,
-          totalLeads: { $sum: 1 },
-          newLeads: { $sum: { $cond: [{ $eq: ["$status", "new"] }, 1, 0] } },
-          hotLeads: {
-            $sum: { $cond: [{ $eq: ["$status", "hot"] }, 1, 0] },
-          },
-          warmLeads: {
-            $sum: { $cond: [{ $eq: ["$status", "warm"] }, 1, 0] },
-          },
-          coldLeads: {
-            $sum: { $cond: [{ $eq: ["$status", "cold"] }, 1, 0] },
-          },
-          qualifiedLeads: {
-            $sum: { $cond: [{ $eq: ["$status", "qualified"] }, 1, 0] },
-          },
-          avgLeadScore: { $avg: "$leadScore" },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          totalLeads: 1,
-          newLeads: 1,
-          hotLeads: 1,
-          warmLeads: 1,
-          coldLeads: 1,
-          qualifiedLeads: 1,
-          avgLeadScore: { $round: ["$avgLeadScore", 2] },
-        },
-      },
+      groupStage,
+      projectStage,
     ]);
 
     const industryStats = await Lead.aggregate([
@@ -867,14 +888,15 @@ const getLeadStats = asyncHandler(async (req, res) => {
     ]);
 
     const result = {
-      overview: stats[0] || {
-        totalLeads: 0,
-        newLeads: 0,
-        hotLeads: 0,
-        warmLeads: 0,
-        coldLeads: 0,
-        qualifiedLeads: 0,
-        avgLeadScore: 0,
+      overview: {
+        totalLeads: stats[0]?.totalLeads || 0,
+        newLeads: stats[0]?.newLeads || 0,
+        hotLeads: stats[0]?.hotLeads || 0,
+        warmLeads: stats[0]?.warmLeads || 0,
+        coldLeads: stats[0]?.coldLeads || 0,
+        qualifiedLeads: stats[0]?.qualifiedLeads || 0,
+        avgLeadScore: stats[0]?.avgLeadScore || 0,
+        ...(isUser && { assignedLeads: stats[0]?.assignedLeads || 0 }),
       },
       industryBreakdown: industryStats,
       platformBreakdown: platformStats,
@@ -1488,7 +1510,7 @@ const assignLeadToUser = asyncHandler(async (req, res) => {
       {
         assignedTo: assignedToUserId,
         assignmentDate: new Date(),
-        status: "assigned"
+        // status: "assigned"
       },
       { new: true, runValidators: true }
     );
