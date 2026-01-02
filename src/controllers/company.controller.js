@@ -1100,6 +1100,14 @@ const updateSubscriptionStatus = asyncHandler(async (req, res) => {
 });
 
 const deleteCompany = asyncHandler(async (req, res) => {
+  // If the user is of type "user", remove them from all companies' teamMembers arrays
+  if (req.company.userType === "user") {
+    await Company.updateMany(
+      { "teamMembers.company": req.company._id },
+      { $pull: { teamMembers: { company: req.company._id } } }
+    );
+  }
+
   await Company.findByIdAndDelete(req.company._id);
 
   const ossDeletePromises = [];
@@ -1150,6 +1158,16 @@ const companyTeamsMembers = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
     const company = await Company.findById(id).populate("teamMembers.company", "_id companyName email logo.url joinedCompanyStatus assignedLeadsType");
+
+    // Clean up invalid team members (those that don't exist in db)
+    if (company && company.teamMembers) {
+      const validMembers = company.teamMembers.filter(member => member.company !== null);
+      if (validMembers.length !== company.teamMembers.length) {
+        company.teamMembers = validMembers;
+        await company.save();
+      }
+    }
+
     return res.status(200).json({ success: true, message: "Team members retrieved successfully", data: company });
   } catch (error) {
     if (error instanceof ApiError) throw error;
