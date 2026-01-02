@@ -644,7 +644,7 @@ const submitFormData = asyncHandler(async (req, res) => {
               platform: lead.platform,
               platformUrl: lead.platformUrl,
               leadScore: bantResult?.leadScore || lead?.leadScore || null,
-              bantCategory: bantResult?.category || lead?.bantCategory || null,
+              bantCategory: bantResult?.category || "new",
             },
             apiKey: company.apiKey,  // ← Automation team can use this
             source: "mongo",
