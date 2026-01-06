@@ -61,10 +61,6 @@ export async function getTenantConnection(tenantId) {
         socketTimeoutMS: 45000,
         serverSelectionTimeoutMS: 5000,
         family: 4,
-        heartbeatFrequencyMS: 10000, // Check connection every 10 seconds
-        maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
-        bufferCommands: false, // Disable mongoose buffering
-        bufferMaxEntries: 0, // Disable mongoose buffering
     });
 
     // Wait for connection to be ready
