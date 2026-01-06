@@ -533,6 +533,10 @@ const submitFormData = asyncHandler(async (req, res) => {
         apiKey: company.apiKey,
       };
 
+      if(leadData?.firstName === null && leadData?.lastName === null && leadData?.fullName === null && leadData?.email === null){
+        throw new ApiError(400, "Data cannot be scrapped for this url")
+      }
+
       const lead = await Lead.create(leadData);
 
       // Always create deal health and next best action for new leads
