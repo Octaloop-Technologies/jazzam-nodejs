@@ -42,7 +42,14 @@ export const injectTenantConnection = async (req, res, next) => {
     }
     
     // Get or create connection for this tenant
-    const tenantConnection = await getTenantConnection(tenantId);
+    let tenantConnection;
+    try {
+      tenantConnection = await getTenantConnection(tenantId);
+    } catch (connectionError) {
+      console.error(`Failed to get tenant connection for ${tenantId}, retrying once:`, connectionError.message);
+      // Retry once - getTenantConnection handles clearing stale connections
+      tenantConnection = await getTenantConnection(tenantId);
+    }
     
     // Attach to request
     req.tenantConnection = tenantConnection;

@@ -26,17 +26,24 @@ export async function getTenantConnection(tenantId) {
     if (tenantConnectionPool.has(tenantId)) {
         const cachedConnection = tenantConnectionPool.get(tenantId);
 
-        // update last used timestamp
-        cachedConnection.lastUsed = Date.now();
-
-        // Return connection if it's ready
+        // Check if connection is still alive and ready
         if (cachedConnection.connection.readyState === 1) {
-            console.log(`Reusing connection for tenant: ${tenantId}`);
-            return cachedConnection.connection;
+            try {
+                // Ping the database to ensure connection is actually usable
+                await cachedConnection.connection.db.admin().ping();
+                console.log(`Reusing healthy connection for tenant: ${tenantId}`);
+                // update last used timestamp
+                cachedConnection.lastUsed = Date.now();
+                return cachedConnection.connection;
+            } catch (pingError) {
+                console.warn(`Stale connection detected for tenant ${tenantId}, removing from pool:`, pingError.message);
+                tenantConnectionPool.delete(tenantId);
+            }
+        } else {
+            // Remove stale connection
+            console.log(`Removing stale connection for tenant: ${tenantId} (readyState: ${cachedConnection.connection.readyState})`);
+            tenantConnectionPool.delete(tenantId);
         }
-
-        // Remove stale connection
-        tenantConnectionPool.delete(tenantId);
     }
 
     // Create new connection
@@ -53,7 +60,11 @@ export async function getTenantConnection(tenantId) {
         minPoolSize: 2,
         socketTimeoutMS: 45000,
         serverSelectionTimeoutMS: 5000,
-        family: 4
+        family: 4,
+        heartbeatFrequencyMS: 10000, // Check connection every 10 seconds
+        maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+        bufferCommands: false, // Disable mongoose buffering
+        bufferMaxEntries: 0, // Disable mongoose buffering
     });
 
     // Wait for connection to be ready
@@ -61,6 +72,15 @@ export async function getTenantConnection(tenantId) {
         connection.once('connected', resolve);
         connection.once('error', reject);
     });
+
+    // Additional health check with ping
+    try {
+        await connection.db.admin().ping();
+        console.log(`Connection health check passed for tenant: ${tenantId}`);
+    } catch (pingError) {
+        console.error(`Connection health check failed for tenant ${tenantId}:`, pingError.message);
+        throw pingError;
+    }
 
     // Store in pool
     tenantConnectionPool.set(tenantId, {
