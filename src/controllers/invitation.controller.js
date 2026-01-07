@@ -20,7 +20,7 @@ const sendInvitation = asyncHandler(async (req, res) => {
       sender?.subscriptionPlan === "free") {
       return res.status(400).json({
         success: false,
-        message: `You users seats already filled according to subscription plan ${sender?.subscriptionPlan}`
+        message: `Your users seats already filled according to subscription plan ${sender?.subscriptionPlan}`
       })
     }
 

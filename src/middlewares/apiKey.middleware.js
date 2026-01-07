@@ -106,6 +106,7 @@ export const verifyAPIKeyWithRateLimit = asyncHandler(async (req, _, next) => {
 
     req.company = company;
     req.companyId = company._id;
+    req.apiKey = apiKey;
 
     next();
   } catch (error) {

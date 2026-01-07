@@ -15,6 +15,7 @@ import { getTenantConnection } from "../db/tenantConnection.js";
 import { getTenantModels } from "../models/index.js";
 import { formSchema } from "../models/form.model.js";
 import mongoose from "mongoose";
+import dns from "dns/promises";
 
 // import {
 //   getAccessTokenCookieOptions,
@@ -48,6 +49,50 @@ import mongoose from "mongoose";
 //     secretAccessKey: process.env.AWS_SECRET_KEY
 //   }
 // })
+
+const DISPOSABLE_EMAIL_DOMAINS = [
+  "mailinator.com",
+  "yopmail.com",
+  "yopmail.fr",
+  "yopmail.net",
+  "illubd.com",
+  "guerrillamail.com",
+  "guerrillamail.info",
+  "guerrillamail.net",
+  "guerrillamail.org",
+  "10minutemail.com",
+  "10minutemail.net",
+  "temp-mail.org",
+  "temp-mail.io",
+  "throwawaymail.com",
+  "trashmail.com",
+  "trashmail.de",
+  "getnada.com",
+  "emailondeck.com",
+  "maildrop.cc",
+  "dispostable.com",
+  "fakeinbox.com",
+  "burnermail.io",
+  "sharklasers.com"
+];
+
+
+async function hasMxRecords(email) {
+  const domain = email.split("@")[1]?.toLowerCase();
+
+  try {
+    const records = await dns.resolveMx(domain);
+    return records && records.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function checkDisposableEmail(email){
+  const domain = email.split("@")[1];
+  const IS_DISPOSABLE = DISPOSABLE_EMAIL_DOMAINS.includes(domain);
+  return IS_DISPOSABLE;
+}
 
 
 const handleSuccessfulOAuth = async (
@@ -225,6 +270,21 @@ const registerCompany = asyncHandler(async (req, res) => {
   // Check if passwords match
   if (password !== confirmPassword) {
     throw new ApiError(400, "Passwords do not match");
+  }
+
+  // Check MX record
+  const hasMx = await hasMxRecords(email);
+  if(!hasMx){
+    throw new ApiError(400, "Email domain cannot receive emails")
+  }
+
+  // Disposable email check
+  const isDisposable = await checkDisposableEmail(email);
+  if (isDisposable) {
+    throw new ApiError(
+      400,
+      "Disposable email addresses are not allowed"
+    );
   }
 
   // Check if Company or email already exists
@@ -447,7 +507,7 @@ const loginCompany = asyncHandler(async (req, res) => {
   const company = await Company.findOne({ email });
 
   if (!company) {
-    throw new ApiError(404, "Company does not exist");
+    throw new ApiError(404, "Invalid Credentials.");
   }
 
   // Check if company is active
