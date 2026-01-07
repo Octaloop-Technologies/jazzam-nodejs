@@ -273,19 +273,19 @@ const registerCompany = asyncHandler(async (req, res) => {
   }
 
   // Check MX record
-  const hasMx = await hasMxRecords(email);
-  if(!hasMx){
-    throw new ApiError(400, "Email domain cannot receive emails")
-  }
+  // const hasMx = await hasMxRecords(email);
+  // if(!hasMx){
+  //   throw new ApiError(400, "Email domain cannot receive emails")
+  // }
 
   // Disposable email check
-  const isDisposable = await checkDisposableEmail(email);
-  if (isDisposable) {
-    throw new ApiError(
-      400,
-      "Disposable email addresses are not allowed"
-    );
-  }
+  // const isDisposable = await checkDisposableEmail(email);
+  // if (isDisposable) {
+  //   throw new ApiError(
+  //     400,
+  //     "Disposable email addresses are not allowed"
+  //   );
+  // }
 
   // Check if Company or email already exists
   const existingCompany = await Company.findOne({ email });
