@@ -496,7 +496,7 @@ const submitFormData = asyncHandler(async (req, res) => {
 
       // STEP 1: Ensure company has an API key (generate if needed)
       if (!company.apiKey) {
-        const apiKey = await company.generateApiKey();
+        await company.generateApiKey();
         await company.save();
         console.log(`✅ Generated API key for company: ${company._id}`);
       }

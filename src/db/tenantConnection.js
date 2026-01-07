@@ -59,23 +59,59 @@ export async function getTenantConnection(tenantId) {
         maxPoolSize: 10,
         minPoolSize: 2,
         socketTimeoutMS: 45000,
-        serverSelectionTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
         family: 4,
     });
 
-    // Wait for connection to be ready
+    // Wait for connection to be ready with proper error handling
     await new Promise((resolve, reject) => {
-        connection.once('connected', resolve);
-        connection.once('error', reject);
+        const timeout = setTimeout(() => {
+            reject(new Error(`Connection timeout for tenant ${tenantId}`));
+        }, 10000);
+
+        connection.once('connected', () => {
+            clearTimeout(timeout);
+            resolve();
+        });
+        
+        connection.once('error', (err) => {
+            clearTimeout(timeout);
+            reject(err);
+        });
     });
+
+    // Ensure connection is actually ready by waiting for 'open' event
+    if (connection.readyState !== 1) {
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error(`Connection not ready for tenant ${tenantId}`));
+            }, 5000);
+
+            if (connection.readyState === 1) {
+                clearTimeout(timeout);
+                resolve();
+            } else {
+                connection.once('open', () => {
+                    clearTimeout(timeout);
+                    resolve();
+                });
+                connection.once('error', (err) => {
+                    clearTimeout(timeout);
+                    reject(err);
+                });
+            }
+        });
+    }
 
     // Additional health check with ping
     try {
         await connection.db.admin().ping();
-        console.log(`Connection health check passed for tenant: ${tenantId}`);
+        console.log(`✅ Connection health check passed for tenant: ${tenantId}`);
     } catch (pingError) {
-        console.error(`Connection health check failed for tenant ${tenantId}:`, pingError.message);
-        throw pingError;
+        console.error(`❌ Connection health check failed for tenant ${tenantId}:`, pingError.message);
+        await connection.close();
+        throw new Error(`Health check failed for tenant ${tenantId}: ${pingError.message}`);
     }
 
     // Store in pool
