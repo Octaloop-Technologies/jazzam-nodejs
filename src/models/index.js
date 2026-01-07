@@ -41,6 +41,14 @@ export function getTenantModels(tenantConnection) {
     throw new Error("Tenant connection is required. Ensure tenant middleware is applied.");
   }
 
+  // Verify connection is in ready state
+  if (tenantConnection.readyState !== 1) {
+    throw new Error(
+      `Tenant connection not ready (state: ${tenantConnection.readyState}). ` +
+      `Expected state: 1 (connected), got: ${getReadyStateText(tenantConnection.readyState)}`
+    );
+  }
+
   return {
     Lead: getTenantModel(tenantConnection, "Lead", leadSchema),
     Form: getTenantModel(tenantConnection, "Form", formSchema),
@@ -50,6 +58,19 @@ export function getTenantModels(tenantConnection) {
     NextBestAction: getTenantModel(tenantConnection, "NextBestAction", nextBestActionSchema),
     Notification: getTenantModel(tenantConnection, "Notification", NotiifcationSchema),
   };
+}
+
+/**
+ * Get connection ready state as text
+ */
+function getReadyStateText(state) {
+  const states = {
+    0: "disconnected",
+    1: "connected",
+    2: "connecting",
+    3: "disconnecting",
+  };
+  return states[state] || "unknown";
 }
 
 /**

@@ -235,6 +235,30 @@ app.get("/", (req, res) => {
 });
 
 // ==========================================================
+// Database Health Check Endpoint
+// ==========================================================
+app.get("/health/db", async (req, res) => {
+  try {
+    const { checkDatabaseHealth } = await import("./utils/dbHealth.js");
+    const health = await checkDatabaseHealth();
+    
+    const isHealthy = health.mainDatabase.status === "healthy";
+    const statusCode = isHealthy ? 200 : 503;
+    
+    res.status(statusCode).json({
+      success: isHealthy,
+      ...health,
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// ==========================================================
 // Swagger API Documentation
 // ==========================================================
 // Serve Swagger UI

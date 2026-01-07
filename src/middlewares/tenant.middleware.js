@@ -41,21 +41,44 @@ export const injectTenantConnection = async (req, res, next) => {
       }
     }
     
-    // Get or create connection for this tenant
+    // Get or create connection for this tenant with retry logic
     let tenantConnection;
-    try {
-      tenantConnection = await getTenantConnection(tenantId);
-    } catch (connectionError) {
-      console.error(`Failed to get tenant connection for ${tenantId}, retrying once:`, connectionError.message);
-      // Retry once - getTenantConnection handles clearing stale connections
-      tenantConnection = await getTenantConnection(tenantId);
+    let retries = 3;
+    let lastError;
+
+    while (retries > 0) {
+      try {
+        tenantConnection = await getTenantConnection(tenantId);
+        
+        // Verify connection is actually usable
+        if (tenantConnection.readyState !== 1) {
+          throw new Error(`Connection not ready (state: ${tenantConnection.readyState})`);
+        }
+        
+        // Success! Break out of retry loop
+        break;
+      } catch (connectionError) {
+        lastError = connectionError;
+        retries--;
+        console.error(`❌ Failed to get tenant connection for ${tenantId} (${3 - retries}/3):`, connectionError.message);
+        
+        if (retries > 0) {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, (4 - retries) * 500));
+        }
+      }
+    }
+
+    // If all retries failed, throw error
+    if (!tenantConnection || tenantConnection.readyState !== 1) {
+      throw new ApiError(503, `Failed to connect to tenant database after 3 attempts: ${lastError?.message || 'Unknown error'}`);
     }
     
     // Attach to request
     req.tenantConnection = tenantConnection;
     req.tenantId = tenantId;
     
-    console.log(`🔗 Tenant connection injected: ${tenantId}`);
+    console.log(`✅ Tenant connection injected: ${tenantId} (readyState: ${tenantConnection.readyState})`);
     
     next();
   } catch (error) {
