@@ -37,6 +37,10 @@ const FollowUpLeadSchema = new mongoose.Schema({
     },
     dateOfSubmission: {
         type: Date,
+    },
+    responseReceived: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

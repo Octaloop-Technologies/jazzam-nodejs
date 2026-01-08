@@ -992,27 +992,63 @@ const followUpEmail = asyncHandler(async (req, res) => {
   try {
     // Get tenant-specific models
     const { Lead, FollowUp } = getTenantModels(req.tenantConnection);
+    const companyId = req.user?.companyId || req.company?._id;
     
-    const leadId = req.params?.id
-    const lead = await Lead.findById(leadId);
-    const findLead = await FollowUp.findOne({ leadId });
-    const result = await emailService.sendFollowUpEmail(lead);
-    if (result.success === true) {
-      findLead.status = "submitted";
-      await findLead.save();
-      return
+    if (!companyId) {
+      throw new ApiError(400, "Company ID not found");
     }
-    return res
-      .status(200)
-      .json(
+    
+    const leadId = req.params?.id;
+    const lead = await Lead.findById(leadId);
+    
+    if (!lead) {
+      throw new ApiError(404, "Lead not found");
+    }
+    
+    const followUpRecord = await FollowUp.findOne({ leadId });
+    
+    if (!followUpRecord) {
+      throw new ApiError(404, "Follow-up record not found");
+    }
+    
+    // Check rate limit
+    const { default: unifiedEmailService } = await import("../services/email/unified.email.service.js");
+    const canSend = await unifiedEmailService.canSendEmail(companyId);
+    
+    if (!canSend) {
+      throw new ApiError(429, "Daily email limit exceeded. Please try again tomorrow.");
+    }
+    
+    // Get company name
+    const { Company } = await import("../models/company.model.js");
+    const company = await Company.findById(companyId).select('companyName');
+    
+    // Send via unified service (automatically uses default mailbox)
+    const result = await unifiedEmailService.sendFollowUpEmail(
+      companyId,
+      leadId,
+      company?.companyName || "Our Company",
+      lead.email,
+      followUpRecord.subject,
+      followUpRecord.message
+    );
+    
+    if (result.success) {
+      followUpRecord.status = "submitted";
+      await followUpRecord.save();
+      
+      return res.status(200).json(
         new ApiResponse(200, result, "Follow up email sent successfully")
       );
-
+    }
+    
+    throw new ApiError(500, "Failed to send follow-up email");
+    
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(
       500,
-      error.message || "Failed send follow up email"
+      error.message || "Failed to send follow up email"
     );
   }
 });

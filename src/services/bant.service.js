@@ -51,50 +51,17 @@ class BANTService {
    * @returns {Promise<Object>} - Parsed BANT result
    */
   async callOpenAI(leadContext) {
-    const systemPrompt = `You are an assistant that qualifies leads using the BANT framework (Budget, Authority, Need, Timeline).
-
-Your task:
-- First output the BANT evaluation in clean JSON format.
-- Then add a total numeric 'score' (0–100).
-- Finally add a 'category' (Hot/Warm/Cold) based on score.
-
-Output ONLY in valid JSON, no extra text.
-
-Format:
-{
-  "Lead Qualification (BANT)": {
-    "Budget": "<budget range> (<Qualified/Unqualified>)",
-    "Authority": "Decision maker: <Yes/No> (<High/Low>)",
-    "Need": [
-      "<point 1>",
-      "<point 2>",
-      "<point 3>"
-    ],
-    "Timeline": "<description> (<timeframe>)"
-  },
-  "score": <number>,
-  "category": "Hot | Warm | Cold"
-}
-
-Scoring rules:
-1. **Budget**: 0–25 points, based on company size, wages, or title.
-2. **Authority**: 0–25 points, decision-making power (High = 25, Medium = 15, Low = 5).
-3. **Need**: 0–25 points, urgency and relevance of product/service.
-4. **Timeline**: 0–25 points, shorter/urgent = higher.
-
-Category thresholds:
-- 80–100 = Hot
-- 60–79 = Warm
-- <60 = Cold
-`;
-
-    const userPrompt = `Qualify this lead: ${leadContext}`;
-
     const completion = await this.openai.chat.completions.create({
       model: this.model,
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        {
+          role: "system",
+          content: "You are an assistant that qualifies leads using the BANT framework (Budget, Authority, Need, Timeline).\n\nYour task:\n- Evaluate leads using available data: company, title, skills, experience, duration, company_size, and industry.\n- Estimate **Budget** based on company size, job title, experience, duration, and skills. Include a short description and assign a range with qualification level (Qualified/Unqualified).\n- Determine **Authority** from title, role seniority, and experience (Decision maker: Yes/No, with High/Medium/Low).\n- Infer **Need** from skills, role, industry, and experience. Provide 2–4 bullet points highlighting potential needs or value for your solution.\n- Evaluate **Timeline** based on role duration, urgency, or implied project timelines.\n- Compute a total numeric 'score' (0–100) and assign a 'category' (Hot/Warm/Cold) using the rules:\n  - Budget: 0–25 points\n  - Authority: 0–25 points\n  - Need: 0–25 points\n  - Timeline: 0–25 points\n  - Category: 80–100 = Hot, 60–79 = Warm, <60 = Cold\n\nRespond ONLY in valid JSON, no extra text, with this format:\n{\n  \"Lead Qualification (BANT)\": {\n    \"Budget\": \"<estimated range> (<Qualified/Unqualified>)\",\n    \"Authority\": \"Decision maker: <Yes/No> (<High/Medium/Low>)\",\n    \"Need\": [\n      \"<point 1>\",\n      \"<point 2>\",\n      \"<point 3>\"\n    ],\n    \"Timeline\": \"<description> (<timeframe>)\"\n  },\n  \"score\": <number>,\n  \"category\": \"Hot | Warm | Cold\"\n}",
+        },
+        {
+          role: "user",
+          content: `Qualify this lead: ${leadContext}`,
+        },
       ],
       temperature: 0.7,
       max_tokens: 1000,

@@ -109,11 +109,13 @@ cron.schedule("0 0 * * *", scheduledLeads, {
 // CRM leads sync cron job (runs every 15 minutes)
 initCrmSyncCron();
 
-// cron job for inbound email's
-// cron.schedule("*/5 * * * *",  async () => {
-//   console.log("checking for email replies.....");
-//   await checkReplies();
-// }) 
+// Multi-mailbox email reply checking (every 5 minutes)
+cron.schedule("*/5 * * * *", async () => {
+  console.log("📬 Checking email replies across all connected mailboxes...");
+  await checkAllMailboxes();
+}, {
+  timezone: "Asia/Riyadh"
+}); 
 
 // Daily health recalculation at 2 AM
 cron.schedule("0 2 * * *", async () => {
@@ -320,8 +322,9 @@ import ServicesRouter from "./routes/services.routes.js";
 import automationRouter from "./routes/automation.routes.js";
 import { engagementHistorySchema } from "./models/engagementHistory.model.js";
 import dealHealthService from "./services/dealHealth.service.js";
-import checkReplies from "./utils/check-inbound-replies.js";
+import checkAllMailboxes from "./utils/mailbox-reply-checker.js";
 import proposalRouter from "./routes/proposal.routes.js";
+import mailboxRouter from "./routes/mailbox.routes.js";
 import nextBestActionRoutes from "./routes/nextBestAction.routes.js";
 import { Company } from "./models/company.model.js";
 import nextBestActionService from "./services/nextBestAction.service.js";
@@ -351,6 +354,7 @@ app.use("/api/v1/services", ServicesRouter);
 app.use("/api/v1/next-best-action", nextBestActionRoutes);
 app.use("/api/v1/proposals", proposalRouter);
 app.use("/api/v1/automation", automationRouter);
+app.use("/api/v1/mailbox", mailboxRouter);
 app.get("/api/email/track/open/:token", async (req, res) => {
   try {
     const { token } = req.params;

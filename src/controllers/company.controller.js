@@ -16,6 +16,7 @@ import { getTenantModels } from "../models/index.js";
 import { formSchema } from "../models/form.model.js";
 import mongoose from "mongoose";
 import dns from "dns/promises";
+import unifiedEmailService from "../services/email/unified.email.service.js";
 
 // import {
 //   getAccessTokenCookieOptions,
@@ -333,7 +334,7 @@ const registerCompany = asyncHandler(async (req, res) => {
   await newEmailOtp.save();
 
   // Send verification email
-  const emailResult = await emailService.sendVerificationCode(
+  const emailResult = await unifiedEmailService.sendVerificationEmail(
     email,
     verificationCode,
   );
@@ -470,7 +471,7 @@ const resendVerificationCode = asyncHandler(async (req, res) => {
   await newEmailOtp.save();
 
   // Send verification email
-  const emailResult = await emailService.sendVerificationCode(
+  const emailResult = await unifiedEmailService.sendVerificationEmail(
     email,
     verificationCode,
   );
