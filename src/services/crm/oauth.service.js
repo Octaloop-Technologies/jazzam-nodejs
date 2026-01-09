@@ -31,8 +31,7 @@ const CRM_CONFIGS = {
   hubspot: {
     authUrl: "https://app.hubspot.com/oauth/authorize",
     tokenUrl: "https://api.hubapi.com/oauth/v1/token",
-    scope:
-      "crm.objects.contacts.read crm.objects.contacts.write crm.objects.companies.read crm.objects.companies.write oauth",
+    scope: "crm.objects.companies.read crm.objects.companies.write crm.objects.contacts.read crm.objects.contacts.write crm.objects.products.read crm.schemas.contacts.read oauth",
     responseType: "code",
   },
   dynamics: {

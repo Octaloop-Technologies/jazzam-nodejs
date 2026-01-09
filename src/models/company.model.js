@@ -303,6 +303,67 @@ const companySchema = new Schema(
       trim: true,
       index: true,
     },
+
+    // Email Mailboxes Configuration (Multiple mailboxes support)
+    mailboxes: [
+      {
+        provider: {
+          type: String,
+          enum: ['gmail', 'outlook', 'yahoo'],
+          required: true
+        },
+        email: {
+          type: String,
+          required: true,
+          trim: true,
+          lowercase: true
+        },
+        displayName: {
+          type: String,
+          trim: true
+        },
+        isDefault: {
+          type: Boolean,
+          default: false
+        },
+        isActive: {
+          type: Boolean,
+          default: true
+        },
+        
+        // OAuth tokens (encrypted)
+        accessToken: String,
+        refreshToken: String,
+        tokenExpiry: Date,
+        scope: [String],
+        
+        // IMAP configuration for reply checking
+        imap: {
+          host: String,
+          port: Number,
+          secure: Boolean
+        },
+        
+        // Usage statistics
+        emailsSent: {
+          type: Number,
+          default: 0
+        },
+        dailyLimit: {
+          type: Number,
+          default: 500 // Default limit
+        },
+        dailyUsage: {
+          count: { type: Number, default: 0 },
+          resetAt: Date
+        },
+        lastUsedAt: Date,
+        connectedAt: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
   },
   {
     timestamps: true,
