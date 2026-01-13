@@ -1,6 +1,6 @@
 # 1. Use a specific LTS version with Alpine (Lightweight OS)
 # Avoiding 'latest' ensures your build doesn't break unexpectedly in the future.
-FROM node:20-alpine
+FROM node:latest
 
 # 2. Set the environment to production 
 # This optimizes how some dependencies compile/run.
