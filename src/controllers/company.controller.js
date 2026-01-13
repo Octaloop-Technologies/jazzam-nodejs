@@ -549,7 +549,9 @@ const loginCompany = asyncHandler(async (req, res) => {
     company?._id
   );
 
-  const redirectUrl = `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+  const redirectUrl = company?.userType === "admin"
+    ? `${process.env.CLIENT_URL}/dashboard/admin?accessToken=${accessToken}&refreshToken=${refreshToken}`
+    : `${process.env.CLIENT_URL}/super-user?accessToken=${accessToken}&refreshToken=${refreshToken}`
 
   console.log("🔍Redirect URL******:", redirectUrl);
 
@@ -807,6 +809,114 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, null, "Password Changed successfully"));
+});
+
+// ==============================================================
+// Forgot Password Functions
+// ==============================================================
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  // Validate email
+  if (!email) {
+    throw new ApiError(400, "Email is required");
+  }
+
+  Validator.validateEmail(email, "Email");
+
+  // Find company by email
+  const company = await Company.findOne({ email });
+
+  if (!company) {
+    // Don't reveal if email exists or not for security reasons
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          null,
+          "If an account with that email exists, a password reset link has been sent."
+        )
+      );
+  }
+
+  // Generate password reset token
+  const resetToken = await company.generatePasswordResetToken();
+  await company.save({ validateBeforeSave: false });
+
+  // Send password reset email
+  const emailResult = await emailService.sendPasswordResetEmail(email, resetToken);
+
+  if (!emailResult.success) {
+    // Clear reset token if email fails
+    company.passwordResetToken = undefined;
+    company.passwordResetExpiry = undefined;
+    await company.save({ validateBeforeSave: false });
+
+    throw new ApiError(500, "Failed to send password reset email. Please try again.");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { email },
+        "Password reset link has been sent to your email. Please check within 1 hour."
+      )
+    );
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword, confirmPassword } = req.body;
+
+  // Validate required fields
+  if (!token || !newPassword || !confirmPassword) {
+    throw new ApiError(400, "Token, new password, and confirm password are required");
+  }
+
+  // Validate password match
+  if (newPassword !== confirmPassword) {
+    throw new ApiError(400, "Passwords do not match");
+  }
+
+  // Validate password strength
+  Validator.validateFields(
+    { password: newPassword },
+    { password: { type: "required", options: { minLength: 8, maxLength: 128 } } }
+  );
+
+  // Hash the token to match stored hash
+  const crypto = await import("crypto");
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+  // Find company with valid reset token
+  const company = await Company.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpiry: { $gt: new Date() },
+  });
+
+  if (!company) {
+    throw new ApiError(400, "Invalid or expired password reset token");
+  }
+
+  // Update password
+  company.password = newPassword;
+  company.passwordResetToken = undefined;
+  company.passwordResetExpiry = undefined;
+
+  await company.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        null,
+        "Password has been reset successfully. You can now login with your new password."
+      )
+    );
 });
 
 // ==============================================================
@@ -1372,6 +1482,8 @@ export {
   logoutCompany,
   refreshAccessToken,
   changeCurrentPassword,
+  forgotPassword,
+  resetPassword,
   getCurrentCompany,
   updateCompanyDetails,
   updateOnboardingStatus,

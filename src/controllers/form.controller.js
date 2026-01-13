@@ -534,7 +534,15 @@ const submitFormData = asyncHandler(async (req, res) => {
       };
 
       if(leadData?.firstName === null && leadData?.lastName === null && leadData?.fullName === null && leadData?.email === null){
-        throw new ApiError(400, "Data cannot be scrapped for this url")
+        return res
+          .status(200)
+          .json(
+            new ApiResponse(
+              200,
+              { },
+              "Invalid lead data from scraping; no lead created"
+            )
+          );
       }
 
       const lead = await Lead.create(leadData);

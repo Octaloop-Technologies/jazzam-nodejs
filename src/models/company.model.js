@@ -40,7 +40,7 @@ const companySchema = new Schema(
 
     // user type
     userType: {
-      enum: ["user", "company"],
+      enum: ["user", "company", "admin"],
       type: String,
       default: "user"
     },
@@ -187,6 +187,14 @@ const companySchema = new Schema(
     },
     refreshToken: {
       type: String,
+    },
+
+    // Password Reset
+    passwordResetToken: {
+      type: String,
+    },
+    passwordResetExpiry: {
+      type: Date,
     },
 
     // Usage Tracking
@@ -476,6 +484,32 @@ companySchema.methods.regenerateApiKey = async function () {
 // Method to validate API key
 companySchema.methods.validateApiKey = function (apiKey) {
   return this.apiKey === apiKey && this.isActive;
+};
+
+// Method to generate password reset token
+companySchema.methods.generatePasswordResetToken = async function () {
+  const crypto = await import("crypto");
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  
+  // Hash token before storing in database
+  this.passwordResetToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+  
+  // Set expiry to 1 hour from now
+  this.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000);
+  
+  return resetToken; // Return unhashed token to send via email
+};
+
+// Method to validate password reset token
+companySchema.methods.validatePasswordResetToken = async function (token) {
+  const crypto = await import("crypto");
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  
+  return (
+    this.passwordResetToken === hashedToken &&
+    this.passwordResetExpiry &&
+    this.passwordResetExpiry > new Date()
+  );
 };
 
 export const Company = mongoose.model("Company", companySchema);
