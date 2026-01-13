@@ -52,7 +52,7 @@ jobs:
       - name: Prune Unused Docker Resources
         run: |
           echo "Cleaning up unused Docker resources..."
-          sudo docker system prune -af --volumes
+          sudo docker system prune -af 
 
   nginx:
     runs-on: [self-hosted,main]
