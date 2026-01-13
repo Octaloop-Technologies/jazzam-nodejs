@@ -16,7 +16,7 @@ export const injectTenantConnection = async (req, res, next) => {
     if(req.query.companyId !== undefined && req.query.companyId !== null){
       tenantId = req.query.companyId;
     }else if(req.company && req.company._id){
-      if (req.company.userType !== "company") {
+      if (req.company.userType !== "company" && req.company.userType !== "admin") {
         throw new ApiError(403, "Users cannot access company-specific resources directly");
       }
       tenantId = req.company._id.toString();
@@ -24,10 +24,10 @@ export const injectTenantConnection = async (req, res, next) => {
       throw new ApiError(400, "Authenticated company information is missing");
     }
 
-    // Verify that the tenantId corresponds to a company (not a user)
+    // Verify that the tenantId corresponds to a company or admin (not a regular user)
     const company = await Company.findById(tenantId);
-    if (!company || company.userType !== "company") {
-      throw new ApiError(403, "Invalid tenant access - only companies can have tenant databases");
+    if (!company || (company.userType !== "company" && company.userType !== "admin")) {
+      throw new ApiError(403, "Invalid tenant access - only companies and admins can have tenant databases");
     }
 
     // Attach company document for further validation

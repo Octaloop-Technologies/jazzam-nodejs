@@ -21,7 +21,8 @@ class OutlookService {
       redirect_uri: `${process.env.SERVER_URL}/api/v1/mailbox/connect/outlook/callback`,
       response_mode: 'query',
       scope: scopes,
-      state: companyId
+      state: companyId,
+      prompt: 'consent' // Force consent screen to appear
     });
 
     return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;

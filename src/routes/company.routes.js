@@ -10,6 +10,8 @@ import {
   logoutCompany,
   refreshAccessToken,
   registerCompany,
+  forgotPassword,
+  resetPassword,
   updateCompanyDetails,
   updateOnboardingStatus,
   updateCompanyLogo,
@@ -49,6 +51,12 @@ router.route("/auth/verify-email").post(verifyEmail);
 
 // POST /api/v1/companies/auth/resend-verification-code
 router.route("/auth/resend-verification-code").post(resendVerificationCode);
+
+// POST /api/v1/companies/auth/forgot-password
+router.route("/auth/forgot-password").post(forgotPassword);
+
+// POST /api/v1/companies/auth/reset-password
+router.route("/auth/reset-password").post(resetPassword);
 
 // ================================================
 // OAuth routes (Google, Zoho)

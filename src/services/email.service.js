@@ -933,6 +933,116 @@ class EmailService {
       `
   }
 
+  // ================================================
+  // Send password reset email
+  // ================================================
+
+  async sendPasswordResetEmail(email, resetToken) {
+    try {
+      // Ensure email service is initialized
+      await this.#initializeTransporter();
+
+      if (!this.#isInitialized) {
+        console.warn(
+          "⚠️ Email service not initialized. Skipping password reset email."
+        );
+        return {
+          success: false,
+          message: "Email service not available",
+          recipient: email,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Validate input parameters
+      this.#validateEmailAddress(email, "User email");
+
+      const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
+
+      const mailOptions = {
+        from: {
+          name: "Jazzaam Support",
+          address: process.env.EMAIL_COMPANY,
+        },
+        to: email,
+        subject: "Password Reset Request - Jazzaam",
+        html: this.#generatePasswordResetTemplate(email, resetUrl),
+        priority: "high",
+      };
+
+      const emailResult = await this.#sendEmail(mailOptions);
+
+      console.log(
+        `✅ Password reset email sent successfully to ${email}: ${emailResult.messageId}`
+      );
+      return {
+        success: true,
+        messageId: emailResult.messageId,
+        recipient: email,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ Failed to send password reset email:", error.message);
+      return {
+        success: false,
+        message: error.message,
+        recipient: email,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+
+  // Generate password reset email template
+  #generatePasswordResetTemplate(email, resetUrl) {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { padding: 30px; }
+            .button { display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+            .button:hover { background-color: #45a049; }
+            .footer { text-align: center; font-size: 12px; color: #999; margin-top: 30px; }
+            .note { background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; }
+            .link { color: #4CAF50; word-break: break-all; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>Password Reset Request</h2>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
+              <p>We received a request to reset the password for your Jazzaam account associated with <strong>${email}</strong>.</p>
+              <p>Click the button below to reset your password:</p>
+              <p style="text-align: center;">
+                <a href="${resetUrl}" class="button">Reset Password</a>
+              </p>
+              <p>Or copy and paste this link into your browser:</p>
+              <p class="link">${resetUrl}</p>
+              <div class="note">
+                <strong>⚠️ Security Notice:</strong>
+                <ul style="margin: 10px 0;">
+                  <li>This link will expire in 1 hour</li>
+                  <li>Never share this link with anyone</li>
+                  <li>If you didn't request this reset, please ignore this email</li>
+                </ul>
+              </div>
+              <p>If you have any questions or concerns, please contact our support team.</p>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Jazzaam. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
 }
 
 // Create and export a singleton instance
