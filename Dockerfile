@@ -1,19 +1,21 @@
-
+# 1. Use a specific LTS version with Alpine (Lightweight OS)
+# Avoiding 'latest' ensures your build doesn't break unexpectedly in the future.
 FROM node:latest
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# 3. Optimize Layer Caching
+# Copy only package files first. Docker uses the cache for this layer 
+# if package.json hasn't changed.
 COPY package*.json ./
 
 # Install any dependencies
 RUN npm install
 
-# Copy the rest of the application code
-COPY . .
+# Switch to the non-root user
+USER node
 
-# Expose the port your app runs on
 EXPOSE 4000
 
 # Run the application

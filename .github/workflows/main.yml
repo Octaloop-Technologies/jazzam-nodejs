@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted,main]
 
     steps:
       # 1. Checkout latest code
@@ -46,17 +46,11 @@ jobs:
       - name: Run New Container
         run: |
           echo "Running new container..."
-          sudo docker run -d -p 4000:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
+          sudo docker run -d -p 4001:4000 --name jazzam-backend-container jazzam-nodejs-image:latest
 
-      # 7. Prune Unused Docker Resources
-      - name: Prune Unused Docker Resources
-        run: |
-          echo "Cleaning up unused Docker resources..."
-          sudo docker system prune -af --volumes
 
   nginx:
-    runs-on: self-hosted
-    needs: build
+    runs-on: [self-hosted,main]
     steps:
       - name: Validate and Restart Nginx
         run: |
