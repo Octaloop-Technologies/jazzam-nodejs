@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { validateMongoUri, createTenantUri } from "../utils/validateMongoUri.js";
 
 /**
  * Connection pool for tenant databases
@@ -19,8 +20,11 @@ const CLEANUP_INTERVAL = 300000;
 
 export async function getTenantConnection(tenantId) {
     if (!tenantId) {
+        console.error('❌ [TenantConnection] Tenant ID is missing');
         throw new Error('Tenant ID is required');
     }
+
+    console.log(`🔍 [TenantConnection] Getting connection for tenant: ${tenantId}`);
 
     // Check if connection exists in pool
     if (tenantConnectionPool.has(tenantId)) {
@@ -31,85 +35,137 @@ export async function getTenantConnection(tenantId) {
             try {
                 // Ping the database to ensure connection is actually usable
                 await cachedConnection.connection.db.admin().ping();
-                console.log(`Reusing healthy connection for tenant: ${tenantId}`);
+                console.log(`♻️ [TenantConnection] Reusing healthy connection for tenant: ${tenantId}`);
                 // update last used timestamp
                 cachedConnection.lastUsed = Date.now();
                 return cachedConnection.connection;
             } catch (pingError) {
-                console.warn(`Stale connection detected for tenant ${tenantId}, removing from pool:`, pingError.message);
+                console.warn(`⚠️ [TenantConnection] Stale connection detected for tenant ${tenantId}, removing from pool:`, pingError.message);
                 tenantConnectionPool.delete(tenantId);
             }
         } else {
             // Remove stale connection
-            console.log(`Removing stale connection for tenant: ${tenantId} (readyState: ${cachedConnection.connection.readyState})`);
+            console.log(`🔄 [TenantConnection] Removing stale connection for tenant: ${tenantId} (readyState: ${cachedConnection.connection.readyState})`);
             tenantConnectionPool.delete(tenantId);
         }
     }
 
     // Create new connection
-    console.log(`Creating new connection for tenant: ${tenantId}`);
+    console.log(`🆕 [TenantConnection] Creating new connection for tenant: ${tenantId}`);
 
-    const dbName = `jazzam_company_${tenantId}`;
-    const mongoUri = process.env.MONGODB_URI.replace(
-        /\/([^\/\?]+)(\?|$)/,
-        `/${dbName}$2`
-    );
+    // Validate MongoDB URI format
+    if (!process.env.MONGODB_URI) {
+        console.error('❌ [TenantConnection] MONGODB_URI environment variable is not set');
+        throw new Error('Database configuration error: MONGODB_URI is missing');
+    }
 
-    const connection = mongoose.createConnection(mongoUri, {
-        maxPoolSize: 10,
-        minPoolSize: 2,
-        socketTimeoutMS: 45000,
-        serverSelectionTimeoutMS: 10000,
-        connectTimeoutMS: 10000,
-        family: 4,
-    });
+    const validation = validateMongoUri(process.env.MONGODB_URI);
+    if (!validation.valid) {
+        console.error('❌ [TenantConnection] Invalid MongoDB URI:', validation.errors);
+        throw new Error(`Invalid MongoDB URI: ${validation.errors.join(', ')}`);
+    }
 
-    // Wait for connection to be ready with proper error handling
-    await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            reject(new Error(`Connection timeout for tenant ${tenantId}`));
-        }, 10000);
+    if (validation.warnings.length > 0) {
+        console.warn('⚠️ [TenantConnection] MongoDB URI warnings:', validation.warnings);
+    }
 
-        connection.once('connected', () => {
-            clearTimeout(timeout);
-            resolve();
+    const { tenantUri, dbName, maskedUri } = createTenantUri(process.env.MONGODB_URI, tenantId);
+    
+    console.log(`📝 [TenantConnection] Database name: ${dbName}`);
+    console.log(`🔗 [TenantConnection] Connection URI (masked): ${maskedUri}`);
+
+    let connection;
+    
+    try {
+        connection = mongoose.createConnection(tenantUri, {
+            maxPoolSize: 10,
+            minPoolSize: 2,
+            socketTimeoutMS: 45000,
+            serverSelectionTimeoutMS: 10000,
+            connectTimeoutMS: 10000,
+            family: 4,
         });
         
-        connection.once('error', (err) => {
-            clearTimeout(timeout);
-            reject(err);
+        console.log(`🔌 [TenantConnection] Connection object created, waiting for connection...`);
+    } catch (createError) {
+        console.error(`❌ [TenantConnection] Failed to create connection object for tenant ${tenantId}:`, createError);
+        throw new Error(`Failed to create database connection: ${createError.message}`);
+    }
+
+    // Wait for connection to be ready with proper error handling
+    try {
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error(`Connection timeout for tenant ${tenantId} - 'connected' event not received within 10s`));
+            }, 10000);
+
+            connection.once('connected', () => {
+                console.log(`📡 [TenantConnection] 'connected' event received for tenant: ${tenantId}`);
+                clearTimeout(timeout);
+                resolve();
+            });
+            
+            connection.once('error', (err) => {
+                console.error(`❌ [TenantConnection] Connection error event for tenant ${tenantId}:`, err);
+                clearTimeout(timeout);
+                reject(err);
+            });
         });
-    });
+    } catch (connectError) {
+        console.error(`❌ [TenantConnection] Failed to establish connection for tenant ${tenantId}:`, connectError);
+        // Close the connection attempt
+        try {
+            await connection.close();
+        } catch (closeError) {
+            console.error(`⚠️ [TenantConnection] Error closing failed connection:`, closeError);
+        }
+        throw new Error(`Connection failed: ${connectError.message}`);
+    }
 
     // Ensure connection is actually ready by waiting for 'open' event
     if (connection.readyState !== 1) {
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error(`Connection not ready for tenant ${tenantId}`));
-            }, 5000);
+        console.log(`⏳ [TenantConnection] Connection not fully open (readyState: ${connection.readyState}), waiting for 'open' event...`);
+        try {
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error(`Connection not ready for tenant ${tenantId} - 'open' event not received within 5s`));
+                }, 5000);
 
-            if (connection.readyState === 1) {
-                clearTimeout(timeout);
-                resolve();
-            } else {
-                connection.once('open', () => {
+                if (connection.readyState === 1) {
+                    console.log(`✅ [TenantConnection] Connection already open`);
                     clearTimeout(timeout);
                     resolve();
-                });
-                connection.once('error', (err) => {
-                    clearTimeout(timeout);
-                    reject(err);
-                });
+                } else {
+                    connection.once('open', () => {
+                        console.log(`📂 [TenantConnection] 'open' event received for tenant: ${tenantId}`);
+                        clearTimeout(timeout);
+                        resolve();
+                    });
+                    connection.once('error', (err) => {
+                        console.error(`❌ [TenantConnection] Error waiting for 'open' event:`, err);
+                        clearTimeout(timeout);
+                        reject(err);
+                    });
+                }
+            });
+        } catch (openError) {
+            console.error(`❌ [TenantConnection] Connection failed to open for tenant ${tenantId}:`, openError);
+            try {
+                await connection.close();
+            } catch (closeError) {
+                console.error(`⚠️ [TenantConnection] Error closing failed connection:`, closeError);
             }
-        });
+            throw new Error(`Connection open failed: ${openError.message}`);
+        }
     }
 
     // Additional health check with ping
     try {
+        console.log(`🏥 [TenantConnection] Performing health check ping...`);
         await connection.db.admin().ping();
-        console.log(`✅ Connection health check passed for tenant: ${tenantId}`);
+        console.log(`✅ [TenantConnection] Health check passed for tenant: ${tenantId}`);
     } catch (pingError) {
-        console.error(`❌ Connection health check failed for tenant ${tenantId}:`, pingError.message);
+        console.error(`❌ [TenantConnection] Health check failed for tenant ${tenantId}:`, pingError.message);
         await connection.close();
         throw new Error(`Health check failed for tenant ${tenantId}: ${pingError.message}`);
     }
@@ -121,12 +177,17 @@ export async function getTenantConnection(tenantId) {
         lastUsed: Date.now()
     });
 
+    console.log(`💾 [TenantConnection] Connection stored in pool (pool size: ${tenantConnectionPool.size}/${MAX_POOL_SIZE})`);
+
     // Enforce pool size limit
     if (tenantConnectionPool.size > MAX_POOL_SIZE) {
+        console.log(`⚠️ [TenantConnection] Pool size exceeded, cleaning up old connections...`);
         await cleanUpOldConnections();
     }
 
-    console.log(`Connection created for tenant: ${tenantId}`);
+    console.log(`✅ [TenantConnection] Connection created successfully for tenant: ${tenantId}`);
+    console.log(`   Database: ${dbName}`);
+    console.log(`   ReadyState: ${connection.readyState}`);
 
     return connection;
 }
